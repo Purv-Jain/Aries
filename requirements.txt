@@ -1,0 +1,32 @@
+# Runtime and test dependencies, pinned.
+#
+# Python pin: CPython 3.14.6 (see docs/05_TECH_STACK_AND_ADRS.md ADR-0001).
+# Install:     python -m venv .venv
+#              .venv\Scripts\python -m pip install -r requirements.txt
+# Run tests:   .venv\Scripts\python -m pytest -q
+#
+# Every pin below is a version that has actually been imported and exercised on
+# this machine (3.14.6, Windows x64). Nothing here is an aspirational version.
+
+# --- PDF ingestion (Phase 2) ---
+pypdf==6.19.0          # BSD-3-Clause; primary page-wise extractor
+pdfplumber==0.11.10    # MIT; per-page fallback for layouts pypdf under-reads
+
+# --- Lexical fallback profile (Phase 3) ---
+scikit-learn==1.9.0    # BSD-3-Clause; TF-IDF + cosine, no model download
+
+# --- Semantic profile, optional (Phase 3) ---
+# Both models are Apache-2.0 and are NOT downloaded by the default path.
+# The suite must stay green with HF_HUB_OFFLINE=1 and these rows uninstalled.
+sentence-transformers==5.7.0
+torch==2.13.0
+transformers==5.14.1
+
+# --- Vector store, optional (Phase 3) ---
+chromadb==1.5.9        # Apache-2.0; persistence. In-memory store is the fallback.
+
+# --- UI (Phase 5) ---
+streamlit==1.65.0      # Apache-2.0
+
+# --- Tests (Phase 2 onward) ---
+pytest==9.1.1          # MIT

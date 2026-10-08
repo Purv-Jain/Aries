@@ -1,0 +1,352 @@
+# 05 — Tech Stack & Architecture Decision Records
+
+**Status:** Phase 1 baseline · Last updated 2026-10-08
+**Related:** [Architecture](04_SYSTEM_ARCHITECTURE.md) · [Open-Source Research](02_OPEN_SOURCE_RESEARCH.md) · [Charter](00_PROJECT_CHARTER.md)
+
+---
+
+## 1. Stack summary
+
+| Layer | Choice | Licence | Role | Cost |
+|---|---|---|---|---|
+| Language | Python **3.14.6** (pinned, ADR-0001) | — | Core | Free |
+| PDF primary | `pypdf` 6.19.0 | BSD-3-Clause | Page-wise extraction | Free |
+| PDF fallback | `pdfplumber` 0.11.10 | MIT | Difficult layouts | Free |
+| Embeddings | `sentence-transformers/all-MiniLM-L6-v2` | Apache-2.0 | Semantic retrieval | Free, ~90 MB once |
+| Vector store | `chromadb` 1.5.9 | Apache-2.0 | Local persistence | Free |
+| Lexical fallback | `scikit-learn` 1.9.x | BSD-3-Clause | TF-IDF retrieval + fallback profile | Free |
+| Generator (optional) | `google/flan-t5-small` | Apache-2.0 | Abstractive answers | Free, ~308 MB once |
+| Generator (default) | Extractive, own code | ours | Deterministic answers | Free |
+| Verifier | Own code | ours | Support scoring + labels | Free |
+| UI | `streamlit` 1.65.0 | Apache-2.0 | Application | Free |
+| Tests | `pytest` 9.1.1 | MIT | Automated validation | Free |
+| VCS | Git / GitHub | — | Contribution evidence | Free for students |
+
+**Total paid cost of the baseline design: INR 0.**
+
+---
+
+## ADR-0001 — Pin the Python version
+
+**Status:** **Accepted 2026-10-08** — human decision recorded in Phase 2. Pin: **CPython 3.14.6** (`C:\Python314\python.exe`). Option **A**.
+
+**Context.** Stage 2 §3.2 says "use one fixed version" and §2.3 reports a run on **Python 3.13.5**.
+This machine exposes **only Python 3.14.6** (`C:\Python314\python.exe`), and `py -0p` lists no other
+interpreter. Most of the stack is already installed for 3.14.
+
+Compatibility evidence gathered 2026-10-08 from the PyPI JSON API:
+
+| Package | `requires_python` | Latest | Wheel tags | 3.14 risk |
+|---|---|---|---|---|
+| `chromadb` | `>=3.9` | 1.5.9 | **`cp39-abi3`** (+ source) | Low — abi3 wheels are forward-compatible, so the `cp39-abi3-win_amd64` wheel should install on 3.14 |
+| `sentence-transformers` | `>=3.10` | 6.1.0 | `py3-none-any` | None (pure Python) |
+| `streamlit` | `>=3.10` | 1.65.0 | `py3-none-any` | None |
+| `scikit-learn` | `>=3.11` | 1.9.1 | `cp311…cp315` | **None** — a native `cp314` wheel exists |
+| `pypdf` | `>=3.9` | 6.19.0 | `py3-none-any` | None |
+| `pdfplumber` | `>=3.8` | 0.11.10 | `py3-none-any` | None |
+
+**Options.**
+
+| Option | Pros | Cons |
+|---|---|---|
+| **A. Develop and pin on 3.14.6** | Available today; `cp314` sklearn wheel exists; most deps pre-installed; chromadb abi3 should work | Deviates from Stage 2's stated 3.13.5; newest interpreter, most likely place for an unforeseen ecosystem break |
+| B. Install 3.13.x and pin there | Matches Stage 2 exactly; largest ecosystem compatibility | Costs setup time; contradicts the "3–5 days" budget; `scikit-learn` needs `cp313` (available) |
+| C. Develop on 3.14, state 3.14 in Stage 3 | Honest and current | Requires an explicit Stage 3 deviation note |
+
+**Recommendation: Option A, with an explicit logged deviation.** Rationale: the deviation is a
+*superset* of the Stage 2 constraint (3.10+), not a violation of it; the environment already has
+almost everything installed; and installing a new interpreter is pure overhead against the deadline.
+Whichever is chosen, Phase 2 must verify `chromadb` actually imports and persists on it — that is
+[R-01](14_RISK_REGISTER.md), and the check is a Phase 2 gate item.
+
+**Consequence if wrong:** a `chromadb` native-extension failure on 3.14. Fallback is to drop to the
+in-memory store and log it (see [Architecture §6](04_SYSTEM_ARCHITECTURE.md#6-failure-modes-and-degradation)).
+
+**Decision of record (2026-10-08).** The human team lead chose **Option A: develop and pin on
+CPython 3.14.6**, on the grounds that the interpreter is already present, a native `cp314`
+`scikit-learn` wheel exists, and installing another interpreter spends budget that the 3–5 day
+deadline does not have. This is a **logged deviation from Stage 2's stated 3.13.5** — not a
+violation of Stage 2's actual constraint, which was "Python 3.10 or newer". The deviation is carried
+as D-10 in [01_REQUIREMENTS.md §3](01_REQUIREMENTS.md#3-stage-2-versus-stage-1-deviations-log) and
+must be restated in the Stage 3 report.
+
+The `chromadb` verification promised above was executed in Phase 2 item 3.10; its real result is
+recorded in [14_RISK_REGISTER.md](14_RISK_REGISTER.md) risk R-01 and in
+[15_PROGRESS_TRACKER.md §8](15_PROGRESS_TRACKER.md#8-measurements-taken). No result was assumed.
+
+---
+
+## ADR-0002 — pypdf primary, pdfplumber fallback
+
+**Status:** Accepted (inherited from Stage 2 §2.1.1)
+
+**Context.** Stage 1 specified `PyPDF2`. Stage 2 corrected this to `pypdf`, the maintained successor.
+
+**Decision.** `pypdf` for all pages; `pdfplumber` re-extracts only pages where `pypdf` returned
+almost no text.
+
+**Why.** `pypdf` is pure-Python, fast, dependency-light, and its page iteration is straightforward.
+`pdfplumber` is slower and heavier (it renders layout) but is genuinely better at multi-column and
+table-heavy text. Retrying only near-empty pages gets the benefit without paying the cost on every
+page.
+
+**Rejected:** `PyMuPDF` (much faster, but AGPL-adjacent licensing concerns and a heavier binary —
+Stage 2 chose not to introduce it), `pdfminer.six` alone (what `pdfplumber` wraps; no advantage in
+using it directly).
+
+---
+
+## ADR-0003 — Sentence splitting without an NLP dependency
+
+**Status:** Accepted (new — resolves Stage 2 gap [I-02](03_GAP_ANALYSIS.md#31-internal-inconsistencies-found-in-the-stage-2-report))
+
+**Context.** Stage 2 says chunking is "sentence-aware" but never names a sentence splitter or a
+dependency for one. This is an unresolved implementation gap.
+
+**Decision.** A small, tested, regex-based sentence splitter in `src/chunking.py`, tuned for academic
+prose:
+
+- Split on `.!?` followed by whitespace and a capital/quote/digit, plus a hard newline.
+- Guard against common academic abbreviations: `e.g.`, `i.e.`, `et al.`, `Fig.`, `Eq.`, `No.`,
+  `Ref.`, `pp.`, `vs.`, `approx.`, `Dr.`, `Prof.`, and single initials (`A. Smith`).
+- Guard against decimals (`3.14`) and version numbers.
+- Collapse whitespace; drop empty fragments.
+
+**Why not NLTK/spaCy?** Both are real options, but each adds a heavyweight dependency (spaCy also
+brings a compiled model download) for a job a well-tested regex handles acceptably on academic text.
+Stage 2's whole design philosophy is minimising weight so the project runs on a plain laptop. A
+regex splitter is ~40 lines, fully testable, and explainable in a viva — which matters here.
+
+**Honest limitation.** A regex splitter mishandles some quotations and bullet-heavy slides. Recorded
+as a limitation rather than hidden.
+
+**Rejected:** `nltk` (large download for Punkt), `spacy` (model download + binary), `langchain`
+text splitters (violates C7).
+
+---
+
+## ADR-0004 — Chroma for persistence, with a licence caveat to record
+
+**Status:** Accepted
+
+**Context.** Stage 2 specified Chroma. It is not currently installed.
+
+**Decision.** `chromadb` `PersistentClient` as the semantic-profile store, with the deterministic
+in-memory store as the fallback and the test store.
+
+**Why.** It persists embeddings + metadata to a local directory with no database server — exactly
+matching C3 and the "no server" claim in Stage 2 Table 4. It also supports metadata filtering, which
+we may want later.
+
+**Caveat to record in Stage 3:** `chromadb 1.5.9`'s PyPI metadata reports
+`license: None` (the `info.license` field is empty) while the project is widely distributed under
+Apache-2.0. We consume it as a **pip dependency**, never vendor it, and our report will cite the
+project's own repository licence rather than PyPI's incomplete metadata field. Worth verifying
+directly against `github.com/chroma-core/chroma` before the report is written.
+
+**Also record:** Chroma's default index is HNSW (approximate), so top-k membership is not guaranteed
+bit-stable across runs. See [Architecture §8](04_SYSTEM_ARCHITECTURE.md#8-determinism).
+
+---
+
+## ADR-0005 — Two profiles, one pipeline
+
+**Status:** Accepted (inherited from Stage 2 §1.1)
+
+**Context.** The project must be demonstrable without any model download, but must also use semantic
+retrieval when available.
+
+**Decision.** Two backends behind identical protocols, selected by config, never by branching through
+the pipeline:
+
+| | Semantic profile | Offline profile |
+|---|---|---|
+| Embedding | MiniLM (384-dim) | TF-IDF (sparse) |
+| Store | Chroma persistent | In-memory |
+| Generator | FLAN-T5-small (optional) | Extractive |
+| Network | One-time download | None at all |
+
+**Why it matters.** The offline profile is what makes the 17 mandated test scenarios runnable in CI
+without downloads, and it is the profile that guarantees our "no API key, no internet" promise
+(NFR-01). It is a first-class citizen, not a degraded afterthought.
+
+---
+
+## ADR-0006 — Never describe cosine similarity as proof
+
+**Status:** Accepted (non-negotiable academic-integrity decision)
+
+**Context.** Stage 1 §4.1 called the similarity check "a proxy, not a proof" — correct. Stage 2 §7.2
+gives the viva answer: "No. It measures relatedness in an embedding space." Stage 2 replaced the
+label "Hallucinated" with "Unsupported" for the same reason.
+
+**Decision.** Three-layer enforcement:
+
+1. **Wording.** `Verified` is defined in
+   [Architecture §5.6](04_SYSTEM_ARCHITECTURE.md#56-what-verified-means--exact-wording) with exact
+   permitted and forbidden phrasing. The report, the UI and the viva all use it.
+2. **Naming.** The word "hallucination" is reserved for evaluation discussion; the system never emits
+   it as a label.
+3. **Design.** The middle band exists precisely because the extremes are not trustworthy — which is
+   the architectural expression of the same doubt.
+
+**Why it matters.** This is the single decision an examiner is most likely to probe, and the one
+most likely to expose a team that overclaims. Getting it right is worth more than any feature.
+
+---
+
+## ADR-0007 — Verifier scope: precision-first abstention
+
+**Status:** Accepted
+
+**Context.** `aberaio/sourcecheck` (GitHub API-verified, licence `NOASSERTION`) states its design
+principle explicitly: it checks whether a claim is **sourced**, not whether it is **true**, and it
+prefers `not_verifiable` over a wrong `supported`. Its ideas informed ours; **no code was used**
+(licence forbids it).
+
+**Decision.** When support is ambiguous, the system must not claim support.
+
+- A marker that does not resolve ⇒ `Unsupported` (never silently dropped).
+- Low similarity ⇒ `Needs Review` at minimum, never a confident pass.
+- No evidence retrieved ⇒ abstain entirely.
+
+**Consequence, accepted knowingly:** we will produce more `Needs Review` labels than a
+maximum-agreement system would. That is the correct trade-off for a tool whose purpose is academic
+integrity, and it must be explained as a deliberate precision-first choice.
+
+---
+
+## ADR-0008 — No citation re-attribution in the MVP
+
+**Status:** Accepted
+
+**Context.** `GooTec/citation-guard` (MIT, 0 stars) implements a three-step policy: verify → if
+unsupported but *another* provided passage supports it, **re-point the citation** → else flag.
+
+**Decision.** We do **not** implement re-attribution.
+
+**Why.** Re-attribution *changes the citation*. In a tool whose entire value proposition is "here is
+where this claim came from", silently moving a citation to a different page destroys the very
+guarantee we are selling. A user who sees `[S1, p.5]` reasonably believes the claim was checked
+against page 5.
+
+We could implement it later as an *explicit user action* ("re-check this claim against the whole
+collection and show me better-supported sources"), where the user — not the system — decides. That
+is a good P2 feature and a natural viva answer.
+
+---
+
+## ADR-0009 — Build standalone; reuse libraries, not a fork
+
+**Status:** Accepted — the Phase 0 headline decision
+
+**Full evidence:** [02_OPEN_SOURCE_RESEARCH.md §4](02_OPEN_SOURCE_RESEARCH.md#4-weighted-comparison)
+(weighted scoring: standalone **9.00**, hybrid **8.00**, fork paper-qa **5.45**, NexusRAG **5.70**,
+DocsGPT **3.65**).
+
+**Decision.** **Strategy B** — build a lightweight standalone project using reusable open-source
+libraries, plus a disciplined subset of Strategy C (pattern-level attribution with prior-art
+citation, no code reuse).
+
+**Why, in one paragraph.** The candidates with real claim-vs-evidence verification
+(`urmeo/NexusRAG`, `GooTec/citation-guard`, `aberaio/sourcecheck`) each break a hard constraint —
+Ollama + a 3B verifier model, or an unusable licence. The licence-clean, high-quality projects
+(`Future-House/paper-qa`, `arc53/DocsGPT`) do not verify claims at all, so adopting them costs days
+and still leaves our entire contribution to be written on top of someone else's architecture.
+Standalone from Apache-2.0/BSD/MIT libraries is the only route that satisfies Stage 2 inside 3–5 days,
+keeps every line explainable at viva, and produces unambiguous individual-contribution evidence.
+
+**Attribution owed** (patterns re-implemented, cited as prior art, no code copied):
+
+| Prior work | Pattern borrowed | URL | Licence |
+|---|---|---|---|
+| `paper-qa` | Page-granular citations; filter markers against the retrieved set; numerical anchoring | https://github.com/Future-House/paper-qa | Apache-2.0 |
+| `NexusRAG` | Verification ordering: validate markers → check support → strip/flag | https://github.com/urmeo/NexusRAG | MIT |
+| `citation-guard` | Verify/re-attribute/flag policy (we implement verify/flag only) | https://github.com/GooTec/citation-guard | MIT |
+| `sourcecheck` | Precision-first abstention philosophy (ideas only) | https://github.com/aberaio/sourcecheck | `NOASSERTION` — **no code used** |
+| `citation-needed-api` | Claim-level audit UX concept | https://gitlab.wikimedia.org/repos/future-audiences/citation-needed-api | MIT |
+| `greyskyAI/PDF_RAG_with_Citations` | Local Streamlit + MiniLM + page-metadata plumbing reference | https://huggingface.co/spaces/greyskyAI/PDF_RAG_with_Citations | Space licence unverified |
+
+**Rejected alternatives:**
+
+| Option | Why rejected |
+|---|---|
+| Fork `paper-qa` | Our contribution becomes an upstream patch → weak individual evidence; days of integration; its answerer is inference-API-based and stubs out without a token |
+| Fork `urmeo/NexusRAG` | Violates C1, C2 and C6 (Ollama + 3B model + FastAPI); 4 stars, brand-new, maintainability unproven |
+| Fork `arc53/DocsGPT` | A platform, not a tool; meeting our brief means deleting most of it |
+| Use `StadynR/scientific-paper-chat-rag` | **GPL-3.0** — copyleft risk on academic work |
+| Use `sourcecheck` / `TrustLayer` / `QA_RAG` | **No licence** — legally unusable for reuse |
+| `StadynR`, `citation-verifier`, `citation-needed-api` | Wrong problem (remote sources / Wikipedia), dormant, or OpenAI-dependent |
+
+---
+
+## ADR-0010 — Streamlit, and its honest limits
+
+**Status:** Accepted with a documented constraint
+
+**Context.** C6 forbids replacing Streamlit. The brief demands a "premium" UI.
+
+**Decision.** Streamlit, with scoped custom CSS, `st.cache_resource` for model reuse, and honest
+state design.
+
+**Known Streamlit limitations** (catalogue in
+[07_UI_UX_DESIGN_SPEC.md §7](07_UI_UX_DESIGN_SPEC.md#7-streamlit-implementation-method-and-known-limitations)):
+
+| Limitation | Consequence | Workaround |
+|---|---|---|
+| CSS injected into an iframe | Global selectors can break Streamlit internals | Namespace all rules under our own root class |
+| Rerun-on-interaction model | State must live in `st.session_state`; no fine-grained reactivity | Explicit state dict, cached resources |
+| Limited component primitives | No true design-system components | Composed containers + CSS |
+| No real client-side routing | No per-tab URLs | `st.radio`/`st.sidebar` navigation |
+| Everything rerenders | Careless code causes flicker and lost focus | `@st.cache_resource` for models/stores |
+
+**If a UI requirement genuinely cannot be met in Streamlit**, the procedure is: document the exact
+limitation, the alternative, the engineering cost, and request approval. Do not unilaterally migrate
+to React/Next.js. To date, no requirement in [FR-41→47](01_REQUIREMENTS.md#27-ui) requires it.
+
+---
+
+## ADR-0011 — Optional FLAN-T5-small, not required
+
+**Status:** Accepted (inherited from Stage 2 §2.1.4)
+
+**Decision.** `google/flan-t5-small` is a **strictly optional** enhancement. The default generator is
+extractive.
+
+**Why.** Three reasons, all defensible: (1) ~308 MB download for marginal quality over extractive on
+CPU; (2) abstractive generation can *introduce* wording not present in the evidence — which is
+precisely the failure mode we exist to detect, so making it the default would be self-defeating;
+(3) greedy decoding on CPU is slow, and the demo must be snappy and repeatable.
+
+**Honest framing for the report:** our design deliberately prefers a *verifiable* answer over a
+*fluent* one. That is the thesis of the project.
+
+---
+
+## ADR-0012 — Thresholds live in config, never inline
+
+**Status:** Accepted
+
+**Decision.** A single `VerificationConfig` dataclass holds `verified_threshold`,
+`review_threshold`, the `0.7`/`0.3` weights, normalisation settings, and the stopword/antonym sets. No
+scoring function contains a numeric literal threshold.
+
+**Why.** Stage 2 §2.1.5 is explicit that thresholds are "configuration values, not universal
+constants" and "must be calibrated on a manually labelled test set". A threshold buried in a
+function is uncalibratable and undefendable in a viva.
+
+---
+
+## ADR-0013 — Treat stage-2 prototype claims as unverified
+
+**Status:** Accepted (integrity decision)
+
+**Decision.** The Stage 2 figures — 10/10 tests, 28 chunks, 11 pages, and the four commit hashes —
+are recorded as **historical report claims** in
+[03_GAP_ANALYSIS.md](03_GAP_ANALYSIS.md#3-report-claims-vs-workspace-reality) and may not be
+presented as current evidence. Stage 2 itself warns its commit IDs "must not be presented as evidence
+of an individual's work".
+
+**Why.** Reproducing someone else's unverified numbers into a submitted report is the exact
+behaviour this project exists to criticise. We would be doing to our own examiner what LLMs do to
+students.

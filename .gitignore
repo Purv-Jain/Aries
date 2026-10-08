@@ -1,0 +1,33 @@
+# Python / tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Environment
+.venv/
+venv/
+
+# Runtime state. Index data and uploads are user data, never committed:
+# SEC-07 keeps writes inside the project, and version control must not pick them up.
+.chroma/
+data/uploads/
+data/index/
+*.sqlite3
+
+# Optional local test fixture. The Stage reports are large binaries; the team
+# should decide explicitly whether to commit them, not have them land by accident.
+data/fixtures/*.pdf
+
+# Secrets. There are none in this project and there must never be any (SEC-06).
+.env
+.env.*
+*.pem
+*.key
+
+# Editors / OS
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store

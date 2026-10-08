@@ -1,0 +1,83 @@
+# 14 — Risk Register
+
+**Status:** Phase 6 baseline · Last updated 2026-10-08
+**Related:** [Charter](00_PROJECT_CHARTER.md) · [Roadmap §10](06_IMPLEMENTATION_ROADMAP.md#10-what-gets-cut-in-order-if-the-deadline-bites) · [Progress Tracker](15_PROGRESS_TRACKER.md)
+
+---
+
+## 1. Scoring
+
+**Likelihood** L: `H` high · `M` medium · `L` low
+**Impact** I: `H` high · `M` medium · `L` low
+**Score** = L × I (H=3, M=2, L=1). Score ≥ 6 → must have an active mitigation before the gate.
+
+Status: `OPEN` · `MITIGATING` · `MONITOR` · `CLOSED` · `ACCEPTED` (conscious, documented)
+
+## 2. Register
+
+| ID | Risk | L | I | Score | Status | Owner | Mitigation | Trigger |
+|---|---|---|---|---|---|---|---|---|
+| ~~R-01~~ | **`chromadb` may not install/import on the pinned Python.** Machine has only 3.14.6; Stage 2 pinned 3.13.5. | M | H | 6 | **RETIRED 2026-10-08** | Purv | **Verified by execution, not assumed.** `chromadb 1.5.9` installed from `requirements.txt` into `.venv` on CPython 3.14.6; a smoke test added 2 vectors, queried, dropped the handle, reopened the same path and counted 2. The `cp39-abi3` wheel was forward-compatible as predicted. Persistence is therefore available to Phase 3. | (none — closed) |
+| **R-02** | **Reusing Stage 2's unverified numbers** (10/10 tests, 28 chunks, 4 commit hashes) because they are already written down and convenient. | H | H | 9 | MITIGATING | All | [ADR-0013](05_TECH_STACK_AND_ADRS.md#adr-0013--treat-stage-2-prototype-claims-as-unverified); [Evidence Tracker](12_STAGE_3_EVIDENCE_TRACKER.md) report-claim gate; [§13](11_DEMO_AND_VIVA_PREPARATION.md#6-anti-fabrication-checklist-before-submission) checklist | Any draft containing a number without an artifact |
+| **R-03** | **The "20 test cases" Stage 1 promised do not exist.** Phase 6 must author them, and authoring cases invites unconsciously writing cases the system passes. | M | H | 6 | **PARTLY DISCHARGED** | Rishabh | **24 cases now exist** ([tests/data/eval_cases.jsonl](../tests/data/eval_cases.jsonl)), and the creation rules in [10 §10.1](10_EVALUATION_METRICS.md#101-creation-rules-these-are-the-integrity-rules) are enforced by tests rather than by intention: every passage asserted verbatim against the extraction (this caught 3 cases with the wrong page and 2 typed from memory), no case may carry an expected system label, 58% are negative or partial. **The weakness that remains: the "two labellers" rule is nominal** — the labels were produced by the same agent that wrote the system, and the recorded 0.958 agreement is a reconciliation of one annotator's judgement against itself, not genuine inter-annotator agreement. It must not be described as two independent labellers in the report. | Report presents 0.958 as independent agreement |
+| **R-04** | **Stage 2's reference [I-01] mis-numbering inherited into Stage 3** — Magesh et al. dropped from the list while the prose still points `[4]` at it. | M | M | 4 | OPEN | Bhavya | Fix during Phase 7 report drafting; already logged in [Gap §3.1](03_GAP_ANALYSIS.md#31-internal-inconsistencies-found-in-the-stage-2-report). | Report draft reuses Stage 2's list verbatim |
+| **R-05** | **Planning consumes the 3–5 day build budget**, plus concurrent SIH obligations. | M | H | 6 | MITIGATING | All | Phases 0–3 complete; the documentation set has not grown since Phase 1 — Phases 2 and 3 only *updated* it. Explicit cut-order in [Roadmap §10](06_IMPLEMENTATION_ROADMAP.md#10-what-gets-cut-in-order-if-the-deadline-bites). Protect Phase 4 and the test suite. | Phase 4 not started after 1 day |
+| **R-06** | **`Verified` semantics get overclaimed** in the report or the viva, turning a heuristic into a correctness claim. This is the project's core academic-integrity risk. | M | H | 6 | MITIGATING | Rishabh | [ADR-0006](05_TECH_STACK_AND_ADRS.md#adr-0006--never-describe-cosine-similarity-as-proof) permitted/forbidden wording; CT-13 test blocks forbidden words automatically; [11 §4.3](11_DEMO_AND_VIVA_PREPARATION.md#43-traps--do-not-fall-into-these). | Draft uses "prove", "confirmed", "guarantee", "accuracy" |
+| **R-07** | **Stable ID collision.** `source_id` derives from name+size+page count, so two genuinely different files with identical triples collide. | L | M | 2 | MONITOR | Bhavya | Add first-page-text hash to the input in Phase 3 if CT-01 fixtures expose it. Phase 2 built the ID scheme and the fixtures did **not** expose a collision, so no change was made — adding a fourth term now would be speculative. Low likelihood; documented rather than over-engineered. | Two uploads map to one source_id |
+| **R-08** | **FLAN-T5 generation drifts from evidence**, producing unsupported wording — the exact failure the project detects. | M | M | 4 | MITIGATING | Purv | Extractive generator is the default ([ADR-0011](05_TECH_STACK_AND_ADRS.md#adr-0011--optional-flan-t5-small-not-required)); markers only from retrieved set; `degraded`/`generator` surfaced in UI; measure marker coverage for FLAN-T5 separately. | FLAN-T5 outputs marker-free claims |
+| ~~R-09~~ | **Streamlit cannot deliver the required UI** (premium research workspace, evidence inspector, all states). | M | M | 4 | **RETIRED 2026-10-08** | Purv | **Every FR-41 to FR-47 requirement is implemented and tested.** No framework change was needed. Three implementation realities were found and worked around rather than escalated: markers had to be real `st.button`s rather than clickable spans (a span cannot be keyboard-activated); module constants became `MappingProxyType` because AGENTS.md forbids mutable singletons; `PipelineConfig` needed `reconfigure()` because immutable-forever configuration would mean restarting the app to change a threshold. Each documented in [07 section 9.1](07_UI_UX_DESIGN_SPEC.md). Three manual checks remain open as **R-23**. | (none - closed) |
+| **R-23** | **The UI looks correct in tests but not on screen.** Automated checks prove the render path executes, the markup is right and the palette passes contrast maths; none of them can see a layout. Three manual checks — greyscale readability, keyboard walkthrough, 1280/768 px — are unrun. | M | M | 6 | OPEN | Purv | Phase 7 screenshot work. Deliberately recorded as OPEN rather than assumed passing: the 325 automated tests are often mistaken for visual verification, and that confusion is exactly the failure this project exists to catch. Until they are run, no report may claim the UI was visually verified. | A manual check is described as automated |
+| **R-10** | **Self-authored evaluation set inflates retrieval metrics** (same people wrote the chunker, retriever, and questions). | H | M | 6 | MITIGATING | All | State the bias explicitly in the report; include unanswerable questions; report counts and sample size; prefer the false-`Verified` rate over a flattering average. | Report quotes a bare Recall@k with no caveat |
+| ~~R-11~~ | **PDF parsing fails on real academic PDFs** — multi-column layouts, tables, figures. `pypdf` alone is weak here. | M | M | 4 | **RETIRED 2026-10-08** | Bhavya | **Measured, not assumed.** The team's own 15-page Stage 2 report — two-column academic prose with tables, the hardest input the project faces — was indexed end to end: 15 pages → **46 chunks**, every page carrying correct text, and 9/9 hand-authored questions retrievable at k=3. Chunk boundaries stayed inside sentences and inside pages. The `pdfplumber` fallback was necessary and sufficient. Remaining, smaller item: the fixture lives outside the repo (**B-07**), so a fresh clone cannot re-run this measurement. | (none - closed) |
+| **R-12** | **Timezone/locale/path issues** on Windows: `F:\AI&PE_Stage_2.pdf` contains `&`, which is illegal in some contexts and awkward in URLs/shell. | M | L | 2 | MONITOR | Bhavya | Never interpolate an unquoted path; always `Path` objects; test with a fixture filename containing `&` and spaces. | Shell or path error in demo |
+| **R-13** | **Prompt injection through a PDF** yields a false `Verified` and destroys the project's claim. | L | H | 3 | MITIGATING | Rishabh | Six controls in [Architecture §7](04_SYSTEM_ARCHITECTURE.md#7-untrusted-content-and-prompt-injection); the key property is that the worst case is a *visible* `Unsupported`, never a false pass. SEC-05 test. | Any injection test produces `Verified` |
+| **R-14** | **Model download fails or is slow** (MiniLM ~90 MB, FLAN-T5 ~308 MB) on the demo machine. | M | M | 4 | MITIGATING | Purv | Offline profile is fully functional without any download; demo it first. Log download failures as a limitation, not a defect. | Demo machine cannot reach HF |
+| ~~R-15~~ | **Peak RAM on the 8 GB target laptop.** MiniLM + Chroma + TF-IDF + Streamlit in one process. | M | M | 4 | **MEASURED 2026-10-08** | Purv | **Measured: peak RSS 191.6 MB, baseline 190.1 MB — the entire 15-page corpus costs +1.5 MB.** Streaminglit + Chroma + scikit-learn account for the baseline. This figure is for the **offline profile only**; a MiniLM + FLAN-T5 figure remains unmeasured because no model has ever been loaded on this machine (see A-06). | Measured RSS exceeds the budget |
+| **R-16** | **Report written from memory rather than from the evidence tracker**, reintroducing unverified claims. | M | H | 6 | MITIGATING | All | Draft **only** from [12](12_STAGE_3_EVIDENCE_TRACKER.md). Report-claim gate: no artifact ⇒ no claim. | A draft number has no tracker row |
+| **R-17** | **"Hallucination" reintroduced as a system label** by an agent optimising for punch. | L | H | 3 | MITIGATING | Rishabh | [ADR-0006](05_TECH_STACK_AND_ADRS.md#adr-0006--never-describe-cosine-similarity-as-proof); label enum is fixed to three values in `models.py`; CT-12 requires a reason code on every result. | Any code path emits "hallucinated" |
+| **R-18** | **Chroma HNSW approximation breaks determinism**, so a "reproducible" claim fails. | L | M | 2 | MITIGATING | Purv | **Actively mitigated in Phase 3.** `hnsw:search_ef = 256` plus a 4x candidate over-fetch, then re-scored by the same similarity function the in-memory store uses, with the tie-break on `chunk_id`. Both constants are named in `vector_store.py`, not hidden in a config. Measured: Chroma and the in-memory store return identical top-3 for the same query. **Measured in Phase 6:** the offline profile returned byte-identical answers, claims, retrievals and verifications across 5 of 5 runs. Still **not** claimed exact at large corpus sizes — [04 §8](04_SYSTEM_ARCHITECTURE.md#8-determinism) says so. | Semantic runs differ between invocations |
+| **R-21** | **A mid-session degradation silently returns unscoreable evidence.** If MiniLM is configured, fails to load, and the pipeline falls back to TF-IDF, the chunks already embedded by MiniLM are not comparable to TF-IDF queries — the store would rank them by meaningless arithmetic. | M | H | 4 | MITIGATING | Purv | Already implemented. `_swap_to_tfidf` counts the affected chunks in `stale_chunks`; the UI must show it. Two tests assert the count is populated and that a degraded run still retrieves real evidence. A full rebuild would be correct but slower than the user asked for, so it is reported rather than done. | Chunks scored by a backend other than the one that embedded them |
+| **R-22** | **A persisted TF-IDF index cannot be queried after a restart** — the vocabulary lives in memory, so a second process cannot build a comparable query vector and EC-15 fails in practice. | M | H | 3 | MITIGATED | Purv | Already implemented. On startup the pipeline refits the TF-IDF vocabulary from the chunk texts Chroma stored (`_refit_lexical_backend`). This is a deterministic lexical fit, **not** re-embedding. Proven by a test that replaces `load_document` with a raiser and shows the restarted pipeline answering from the persisted index without opening a PDF. | A restart cannot answer a query against its own index |
+| **R-19** | **Plurality of abandoned or half-finished work** — a common academic-project failure mode. | M | M | 4 | MITIGATING | All | Cut-order in [Roadmap §10](06_IMPLEMENTATION_ROADMAP.md#10-what-gets-cut-in-order-if-the-deadline-bites); vertical slices; no phase skipping; runnable at every gate. | A phase is more than half done with 1 day left |
+| **R-20** | **Scope creep** ("let's add NLI / OCR / a chatbot history"). | M | M | 4 | MITIGATING | All | Out-of-scope register OOS-01→OOS-09 in [01 §7](01_REQUIREMENTS.md#7-out-of-scope-register-do-not-implement-without-approval); additions require an ADR + approval. | A new feature is scoped without approval |
+| **R-24** | **The offline profile does not know when it does not know.** Asked about mercury's boiling point, the 2019 Cricket World Cup, and photosynthesis — none of them in the corpus — it answered all three, quoting the least-irrelevant sentence available, at mean support **0.59**. The failure mode is worse than useless: a confident answer carrying genuine citations drawn from irrelevant passages, which *looks* like an informed system. | H | H | 9 | **OPEN** | Purv | The abstention *path* is implemented and tested (an empty index returns a correct abstained response). The defect is in the extractive generator's trigger, which asks "is any sentence relevant enough?" and never asks "do these passages answer the question?". TF-IDF cosine between unrelated English sentences is near zero but never exactly zero, so something always clears the bar. A relevance floor on the retrieved set is the obvious fix; it was not attempted and is not claimed. Threshold calibration cannot fix it — the top passage was already retrieved. **Highest-scoring open risk.** | Report presents the abstention rate without R-24 beside it |
+
+## 3. Top risks — what to watch weekly
+
+| Rank | ID | Why |
+|---|---|---|
+| 1 | **R-24** | Measured at 9 and open. A system that answers from irrelevant passages with real citations is the exact failure this project claims to detect |
+| 2 | **R-02** | The one that would most damage the report's credibility |
+| 3 | **R-06 / R-10** | The two ways our own claims become indefensible |
+| 4 | **R-05** | The only risk that makes everything else moot |
+| 5 | **R-16** | How R-02 actually happens in practice |
+| 6 | **R-03** | Partly discharged — 24 cases exist, but they are self-authored. See A-02 |
+
+## 4. Accepted risks (conscious, documented)
+
+| ID | Risk | Why accepted |
+|---|---|---|
+| A-01 | Verifier is a heuristic, not entailment | Fundamental to a zero-cost, CPU-only, 3–5 day scope. Documented as *the* limitation. NLI is the documented next step. |
+| A-02 | Evaluation set is self-authored | Normal for a microproject. Accepted **only** with the bias stated in the report and unanswerable cases included. |
+| A-03 | Chroma HNSW is approximate | Fine for this scale; determinism is guaranteed on the offline profile only, and that is stated. |
+| A-04 | No OCR | Explicitly out of scope in Stage 2. Clear user-facing limitation message instead. |
+| A-05 | English-first | Explicitly out of scope in Stage 1. |
+| A-06 | Semantic profile is unmeasured | No MiniLM or FLAN-T5 weights on this machine. The code is written and the *degradation* paths are tested, but its latency, Recall@k and memory figures do not exist. Any number for them would be invented, so §8.4 of the tracker lists them as explicitly not measured. |
+| A-07 | Determinism claim excludes timings | Byte-identity holds for answer, claims, retrievals, verifications, summary and warnings — not for the five wall-clock timings, which differ by construction. Both the first (0.2) and corrected (1.000) figures are recorded so the change of method is visible. |
+
+## 5. Risk review cadence
+
+- **Every phase gate:** re-score R-01, R-02, R-05, R-06, R-10, R-16.
+- **Before Stage 3 drafting:** full review; anything `OPEN` with a report claim must be closed or the
+  claim must be dropped.
+- **New risks** are added here immediately, not at the end.
+
+## 6. Escalation
+
+If a score-6+ risk materialises and cannot be mitigated inside the current phase:
+
+1. Record it in the [progress tracker](15_PROGRESS_TRACKER.md#6-blockers) as a blocker.
+2. Apply the [cut order](06_IMPLEMENTATION_ROADMAP.md#10-what-gets-cut-in-order-if-the-deadline-bites).
+3. If neither works, raise it with the guide before the deadline — not after.
+
+Never resolve a risk by silently removing a requirement, a test, or a limitation from the report.

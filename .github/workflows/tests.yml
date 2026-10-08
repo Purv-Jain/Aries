@@ -1,0 +1,60 @@
+name: tests
+
+# The offline suite only. No model weights are downloaded and no semantic test runs, which keeps the
+# job fast, deterministic and free — matching Stage 2 §3.3's argument that unit tests matter more
+# than deployment plumbing here.
+#
+# CI is a collaboration tool, not a deliverable. It runs the same command a teammate runs locally.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  offline:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Two platforms because PDF extraction is the layer most likely to differ between
+        # them, and a parsing difference that only shows on one OS is a bug worth finding before
+        # the demo rather than during it.
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"   # ADR-0001: CPython 3.14.6
+
+      - name: Install pinned dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+
+      - name: Offline test suite
+        env:
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
+          HF_DATASETS_OFFLINE: "1"
+        run: python -m pytest -q -m "not semantic"
+
+      - name: Verify app.py still parses and imports no leaf modules
+        run: python -c "import ast; ast.parse(open('app.py', encoding='utf-8').read()); print('app.py ok')"
+
+  # Separate job so an offline-suite failure is never mistaken for a security-scan failure.
+  security-sweep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      - run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+      - name: Security and determinism checks
+        run: |
+          python -m pytest -q tests/test_hardening.py \
+            -k "SecuritySweep or DeterminismRegression or Requirements"

@@ -1,0 +1,282 @@
+{
+  "answer": {
+    "abstained": false,
+    "abstention_reason": null,
+    "claims": [
+      {
+        "claim_id": "clm_0",
+        "markers": [
+          {
+            "page_number": 7,
+            "raw": "S1, p.7",
+            "resolved": true,
+            "source_id": "doc_3b1b5ea2b188"
+          }
+        ],
+        "position": 0,
+        "text": "The run used Python 3.13.5, pypdf, pdfplumber and scikit-learn in the offline validation profile."
+      },
+      {
+        "claim_id": "clm_1",
+        "markers": [
+          {
+            "page_number": 7,
+            "raw": "S1, p.7",
+            "resolved": true,
+            "source_id": "doc_3b1b5ea2b188"
+          }
+        ],
+        "position": 1,
+        "text": "The same interfaces are used by the semantic profile, so the test verifies the control flow even when optional MiniLM, Chroma, Transformers and Streamlit packages are not loaded."
+      },
+      {
+        "claim_id": "clm_2",
+        "markers": [
+          {
+            "page_number": 7,
+            "raw": "S1, p.7",
+            "resolved": true,
+            "source_id": "doc_3b1b5ea2b188"
+          }
+        ],
+        "position": 2,
+        "text": "For the query \u201cWhat technology stack is listed in Table 1 resource selection and rationale?\u201d, the first retrieved chunk came from page 5 and the generated answer cited that page."
+      },
+      {
+        "claim_id": "clm_3",
+        "markers": [
+          {
+            "page_number": 9,
+            "raw": "S2, p.9",
+            "resolved": true,
+            "source_id": "doc_3b1b5ea2b188"
+          }
+        ],
+        "position": 3,
+        "text": "Tools & Technology Usage 3.1 Tech Stack Specifications Table 4: Technology stack specifications and selection rationale Technology Role Reason for selection Cost status Python 3.10+ Core language Strong NLP/ML ecosystem and suitable for a single- language student project."
+      },
+      {
+        "claim_id": "clm_4",
+        "markers": [
+          {
+            "page_number": 14,
+            "raw": "S3, p.14",
+            "resolved": true,
+            "source_id": "doc_3b1b5ea2b188"
+          }
+        ],
+        "position": 4,
+        "text": "What is the difference between retrieval score and verification score?"
+      }
+    ],
+    "degraded": false,
+    "generator": "extractive",
+    "notes": [],
+    "text": "The run used Python 3.13.5, pypdf, pdfplumber and scikit-learn in the offline validation profile. [S1, p.7] The same interfaces are used by the semantic profile, so the test verifies the control flow even when optional MiniLM, Chroma, Transformers and Streamlit packages are not loaded. [S1, p.7] For the query \u201cWhat technology stack is listed in Table 1 resource selection and rationale?\u201d, the first retrieved chunk came from page 5 and the generated answer cited that page. [S1, p.7] Tools & Technology Usage 3.1 Tech Stack Specifications Table 4: Technology stack specifications and selection rationale Technology Role Reason for selection Cost status Python 3.10+ Core language Strong NLP/ML ecosystem and suitable for a single- language student project. [S2, p.9] What is the difference between retrieval score and verification score? [S3, p.14]"
+  },
+  "metrics": {
+    "backend": "tfidf",
+    "embed_ms": 1.2710999944829382,
+    "generate_ms": 0.9538000012980774,
+    "generator": "extractive",
+    "retrieve_ms": 1.8597999951452948,
+    "store": "memory",
+    "total_ms": 10.318100001313724,
+    "verify_ms": 6.20350000099279
+  },
+  "question": "What technology stack is listed, and how does the system verify citations?",
+  "retrieved": [
+    {
+      "backend": "tfidf",
+      "chunk": {
+        "chunk_id": "chk_33b1b0efb448",
+        "chunk_index_in_page": 0,
+        "citation_label": "",
+        "filename": "FAI_PE_Microproject_Stage_2_Report_Revised.pdf",
+        "page_number": 7,
+        "source_id": "doc_3b1b5ea2b188",
+        "text": "7 2.3 Execution & Outputs A reproducible validation run was executed using the Level 1 report as input. The run used Python 3.13.5, pypdf, pdfplumber and scikit-learn in the offline validation profile. The same interfaces are used by the semantic profile, so the test verifies the control flow even when optional MiniLM, Chroma, Transformers and Streamlit packages are not loaded. The document contained 11 pages and was split into 28 chunks. For the query \u201cWhat technology stack is listed in Table 1 resource selection and rationale?\u201d, the first retrieved chunk came from page 5 and the generated answer cited that page. The citation verifier produced two Verified results for the two returned evidence statements. Figure 3: Actual automated-test and local-demo output from the Stage 2 prototype",
+        "word_count": 126
+      },
+      "rank": 1,
+      "relevance_score": 0.18067156645996646
+    },
+    {
+      "backend": "tfidf",
+      "chunk": {
+        "chunk_id": "chk_3933d6db4109",
+        "chunk_index_in_page": 0,
+        "citation_label": "",
+        "filename": "FAI_PE_Microproject_Stage_2_Report_Revised.pdf",
+        "page_number": 9,
+        "source_id": "doc_3b1b5ea2b188",
+        "text": "9 3. Tools & Technology Usage 3.1 Tech Stack Specifications Table 4: Technology stack specifications and selection rationale Technology Role Reason for selection Cost status Python 3.10+ Core language Strong NLP/ML ecosystem and suitable for a single- language student project. Validation run also works on Python 3.13.5. Free pypdf [10] Primary PDF extraction Maintained successor package name to PyPDF2; page- wise text extraction and metadata access. Open source pdfplumber Extraction fallback Useful when page layout is difficult for the primary parser. Open source all-MiniLM-L6-v2 [8] Primary embeddings 384-dimensional sentence embeddings for semantic search; compact model suitable for local use. Apache 2.0 model TF-IDF / scikit-learn Offline validation fallback Allows retrieval and verifier tests to run without downloading model weights. Open source Chroma [7] Persistent vector store Stores documents, metadata and embeddings locally; no database server is required for the project profile. Open source FLAN-T5-small [11] Optional local generator Instruction-tuned local text-to-text model. The safetensors weight file is about 308 MB, which is practical compared with multi-billion-parameter models.",
+        "word_count": 167
+      },
+      "rank": 2,
+      "relevance_score": 0.12674153271117475
+    },
+    {
+      "backend": "tfidf",
+      "chunk": {
+        "chunk_id": "chk_7b8679ec2969",
+        "chunk_index_in_page": 1,
+        "citation_label": "",
+        "filename": "FAI_PE_Microproject_Stage_2_Report_Revised.pdf",
+        "page_number": 14,
+        "source_id": "doc_3b1b5ea2b188",
+        "text": "safer system label; hallucination is an interpretation requiring evaluation. Why Chroma? It can persist embeddings and metadata locally and does not require a separately managed database server for this scale. Why keep a TF-IDF fallback? It allows deterministic unit/integration testing when neural model weights are not downloaded, and it keeps the project demonstrable without paid or hosted services. Why FLAN-T5-small? It is a compact instruction-tuned local model with a much smaller weight file than many modern LLMs. The trade-off is weaker generation quality but greater feasibility on ordinary laptops. What is the difference between retrieval score and verification score? Retrieval score ranks chunks against the user question. Verification score compares an answer claim with the cited evidence. They solve different problems and should not be treated as interchangeable. What happens with a scanned PDF? pypdf and pdfplumber cannot reliably read text that exists only as an image. The system reports the limitation; OCR is a possible future extension. What would be the next technical improvement?",
+        "word_count": 165
+      },
+      "rank": 3,
+      "relevance_score": 0.12430216092177229
+    },
+    {
+      "backend": "tfidf",
+      "chunk": {
+        "chunk_id": "chk_ea8422563d79",
+        "chunk_index_in_page": 1,
+        "citation_label": "",
+        "filename": "FAI_PE_Microproject_Stage_2_Report_Revised.pdf",
+        "page_number": 8,
+        "source_id": "doc_3b1b5ea2b188",
+        "text": "top_k larger than collection Bound top_k to the number of indexed chunks. Missing optional semantic packages Keep the fallback profile available and show an installation message rather than failing silently. Invalid citation marker Mark it Unsupported because it does not resolve to retrieved evidence. Borderline similarity Return Needs Review rather than pretending the system is certain.",
+        "word_count": 56
+      },
+      "rank": 4,
+      "relevance_score": 0.09589462661544321
+    },
+    {
+      "backend": "tfidf",
+      "chunk": {
+        "chunk_id": "chk_afc293d86983",
+        "chunk_index_in_page": 2,
+        "citation_label": "",
+        "filename": "FAI_PE_Microproject_Stage_2_Report_Revised.pdf",
+        "page_number": 14,
+        "source_id": "doc_3b1b5ea2b188",
+        "text": "and pdfplumber cannot reliably read text that exists only as an image. The system reports the limitation; OCR is a possible future extension. What would be the next technical improvement? Build a manually labelled claim-evidence set, calibrate thresholds, and compare the current similarity verifier with a small NLI/cross-encoder verifier. 7.3 Design Trade-offs Table 12: Major design trade-offs Decision Trade-off Local model vs hosted API Local execution removes recurring cost and privacy concerns but is slower and less capable on CPU. MiniLM vs larger embeddings MiniLM is compact and fast; larger models may improve retrieval but increase download, RAM and inference time. Chroma vs plain in-memory store Chroma provides persistence and metadata search; in-memory TF-IDF is simpler and more deterministic for automated tests. Extractive vs abstractive generation Extractive output is less natural but easier to verify; abstractive FLAN-T5 output is more readable but can introduce unsupported wording. Similarity verifier vs NLI verifier Similarity is lightweight and easy to explain; NLI can better model entailment but adds model size and evaluation complexity.",
+        "word_count": 170
+      },
+      "rank": 5,
+      "relevance_score": 0.09507218071893489
+    }
+  ],
+  "summary": {
+    "abstained": false,
+    "needs_review": 3,
+    "uncited": 0,
+    "unresolved_refs": 0,
+    "unsupported": 0,
+    "verified": 2,
+    "worst_support": 0.0
+  },
+  "verifications": [
+    {
+      "claim_id": "clm_0",
+      "claim_text": "The run used Python 3.13.5, pypdf, pdfplumber and scikit-learn in the offline validation profile.",
+      "evidence": {
+        "chunk_id": "chk_33b1b0efb448",
+        "chunk_index_in_page": 0,
+        "citation_label": "",
+        "filename": "FAI_PE_Microproject_Stage_2_Report_Revised.pdf",
+        "page_number": 7,
+        "source_id": "doc_3b1b5ea2b188",
+        "text": "7 2.3 Execution & Outputs A reproducible validation run was executed using the Level 1 report as input. The run used Python 3.13.5, pypdf, pdfplumber and scikit-learn in the offline validation profile. The same interfaces are used by the semantic profile, so the test verifies the control flow even when optional MiniLM, Chroma, Transformers and Streamlit packages are not loaded. The document contained 11 pages and was split into 28 chunks. For the query \u201cWhat technology stack is listed in Table 1 resource selection and rationale?\u201d, the first retrieved chunk came from page 5 and the generated answer cited that page. The citation verifier produced two Verified results for the two returned evidence statements. Figure 3: Actual automated-test and local-demo output from the Stage 2 prototype",
+        "word_count": 126
+      },
+      "explanation": "The claim is not negated but the part of the cited passage that matches it is negated (page 7). Polarity may differ; a human should read the passage.",
+      "label": "Needs Review",
+      "overlap": 0.0,
+      "reason": "contradiction_detected",
+      "relevance_score": 0.18067156645996646,
+      "similarity": 0.0,
+      "support_score": 0.0
+    },
+    {
+      "claim_id": "clm_1",
+      "claim_text": "The same interfaces are used by the semantic profile, so the test verifies the control flow even when optional MiniLM, Chroma, Transformers and Streamlit packages are not loaded.",
+      "evidence": {
+        "chunk_id": "chk_33b1b0efb448",
+        "chunk_index_in_page": 0,
+        "citation_label": "",
+        "filename": "FAI_PE_Microproject_Stage_2_Report_Revised.pdf",
+        "page_number": 7,
+        "source_id": "doc_3b1b5ea2b188",
+        "text": "7 2.3 Execution & Outputs A reproducible validation run was executed using the Level 1 report as input. The run used Python 3.13.5, pypdf, pdfplumber and scikit-learn in the offline validation profile. The same interfaces are used by the semantic profile, so the test verifies the control flow even when optional MiniLM, Chroma, Transformers and Streamlit packages are not loaded. The document contained 11 pages and was split into 28 chunks. For the query \u201cWhat technology stack is listed in Table 1 resource selection and rationale?\u201d, the first retrieved chunk came from page 5 and the generated answer cited that page. The citation verifier produced two Verified results for the two returned evidence statements. Figure 3: Actual automated-test and local-demo output from the Stage 2 prototype",
+        "word_count": 126
+      },
+      "explanation": "Support score 0.66 (threshold for Verified: 0.63 for Verified, 0.40 for review). Semantic component 0.51, lexical containment 1.00. Cited FAI_PE_Microproject_Stage_2_Report_Revised.pdf, page 7, marker [S1, p.7]. This means the claim passed the project's documented support-check heuristic. It is an indicator of lexical and semantic correspondence with the cited passage -- not logical entailment, and not proof that the claim is factually true.",
+      "label": "Verified",
+      "overlap": 1.0,
+      "reason": "supported",
+      "relevance_score": 0.18067156645996646,
+      "similarity": 0.5149297086745028,
+      "support_score": 0.660450796072152
+    },
+    {
+      "claim_id": "clm_2",
+      "claim_text": "For the query \u201cWhat technology stack is listed in Table 1 resource selection and rationale?\u201d, the first retrieved chunk came from page 5 and the generated answer cited that page.",
+      "evidence": {
+        "chunk_id": "chk_33b1b0efb448",
+        "chunk_index_in_page": 0,
+        "citation_label": "",
+        "filename": "FAI_PE_Microproject_Stage_2_Report_Revised.pdf",
+        "page_number": 7,
+        "source_id": "doc_3b1b5ea2b188",
+        "text": "7 2.3 Execution & Outputs A reproducible validation run was executed using the Level 1 report as input. The run used Python 3.13.5, pypdf, pdfplumber and scikit-learn in the offline validation profile. The same interfaces are used by the semantic profile, so the test verifies the control flow even when optional MiniLM, Chroma, Transformers and Streamlit packages are not loaded. The document contained 11 pages and was split into 28 chunks. For the query \u201cWhat technology stack is listed in Table 1 resource selection and rationale?\u201d, the first retrieved chunk came from page 5 and the generated answer cited that page. The citation verifier produced two Verified results for the two returned evidence statements. Figure 3: Actual automated-test and local-demo output from the Stage 2 prototype",
+        "word_count": 126
+      },
+      "explanation": "Support score 0.65 (threshold for Verified: 0.63 for Verified, 0.40 for review). Semantic component 0.51, lexical containment 1.00. Cited FAI_PE_Microproject_Stage_2_Report_Revised.pdf, page 7, marker [S1, p.7]. This means the claim passed the project's documented support-check heuristic. It is an indicator of lexical and semantic correspondence with the cited passage -- not logical entailment, and not proof that the claim is factually true.",
+      "label": "Verified",
+      "overlap": 1.0,
+      "reason": "supported",
+      "relevance_score": 0.18067156645996646,
+      "similarity": 0.5053879452546537,
+      "support_score": 0.6537715616782576
+    },
+    {
+      "claim_id": "clm_3",
+      "claim_text": "Tools & Technology Usage 3.1 Tech Stack Specifications Table 4: Technology stack specifications and selection rationale Technology Role Reason for selection Cost status Python 3.10+ Core language Strong NLP/ML ecosystem and suitable for a single- language student project.",
+      "evidence": {
+        "chunk_id": "chk_3933d6db4109",
+        "chunk_index_in_page": 0,
+        "citation_label": "",
+        "filename": "FAI_PE_Microproject_Stage_2_Report_Revised.pdf",
+        "page_number": 9,
+        "source_id": "doc_3b1b5ea2b188",
+        "text": "9 3. Tools & Technology Usage 3.1 Tech Stack Specifications Table 4: Technology stack specifications and selection rationale Technology Role Reason for selection Cost status Python 3.10+ Core language Strong NLP/ML ecosystem and suitable for a single- language student project. Validation run also works on Python 3.13.5. Free pypdf [10] Primary PDF extraction Maintained successor package name to PyPDF2; page- wise text extraction and metadata access. Open source pdfplumber Extraction fallback Useful when page layout is difficult for the primary parser. Open source all-MiniLM-L6-v2 [8] Primary embeddings 384-dimensional sentence embeddings for semantic search; compact model suitable for local use. Apache 2.0 model TF-IDF / scikit-learn Offline validation fallback Allows retrieval and verifier tests to run without downloading model weights. Open source Chroma [7] Persistent vector store Stores documents, metadata and embeddings locally; no database server is required for the project profile. Open source FLAN-T5-small [11] Optional local generator Instruction-tuned local text-to-text model. The safetensors weight file is about 308 MB, which is practical compared with multi-billion-parameter models.",
+        "word_count": 167
+      },
+      "explanation": "The claim is not negated but the part of the cited passage that matches it is negated (page 9). Polarity may differ; a human should read the passage.",
+      "label": "Needs Review",
+      "overlap": 0.0,
+      "reason": "contradiction_detected",
+      "relevance_score": 0.12674153271117475,
+      "similarity": 0.0,
+      "support_score": 0.0
+    },
+    {
+      "claim_id": "clm_4",
+      "claim_text": "What is the difference between retrieval score and verification score?",
+      "evidence": {
+        "chunk_id": "chk_7b8679ec2969",
+        "chunk_index_in_page": 1,
+        "citation_label": "",
+        "filename": "FAI_PE_Microproject_Stage_2_Report_Revised.pdf",
+        "page_number": 14,
+        "source_id": "doc_3b1b5ea2b188",
+        "text": "safer system label; hallucination is an interpretation requiring evaluation. Why Chroma? It can persist embeddings and metadata locally and does not require a separately managed database server for this scale. Why keep a TF-IDF fallback? It allows deterministic unit/integration testing when neural model weights are not downloaded, and it keeps the project demonstrable without paid or hosted services. Why FLAN-T5-small? It is a compact instruction-tuned local model with a much smaller weight file than many modern LLMs. The trade-off is weaker generation quality but greater feasibility on ordinary laptops. What is the difference between retrieval score and verification score? Retrieval score ranks chunks against the user question. Verification score compares an answer claim with the cited evidence. They solve different problems and should not be treated as interchangeable. What happens with a scanned PDF? pypdf and pdfplumber cannot reliably read text that exists only as an image. The system reports the limitation; OCR is a possible future extension. What would be the next technical improvement?",
+        "word_count": 165
+      },
+      "explanation": "Support score 0.53 (threshold for Needs Review: 0.63 for Verified, 0.40 for review). Semantic component 0.33, lexical containment 1.00. Cited FAI_PE_Microproject_Stage_2_Report_Revised.pdf, page 14, marker [S3, p.14]. The cited passage shares some vocabulary but not enough to clear the Verified threshold. Read the passage before relying on this claim.",
+      "label": "Needs Review",
+      "overlap": 1.0,
+      "reason": "weak_support",
+      "relevance_score": 0.12430216092177229,
+      "similarity": 0.32699192435020297,
+      "support_score": 0.528894347045142
+    }
+  ],
+  "warnings": []
+}
