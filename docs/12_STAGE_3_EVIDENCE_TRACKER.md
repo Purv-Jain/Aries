@@ -27,7 +27,7 @@ Anything else stays empty. An empty `Evidence` cell means the claim cannot go in
 
 | Claim class | Count | Verified today |
 |---|---|---|
-| Automated tests | 17 scenarios + 20 contracts | **402 passing**, 6 deselected, 0 skipped; 17 scenarios + 20 contracts covered, plus 98 UI and 46 hardening tests |
+| Automated tests | 17 scenarios + 20 contracts | **405 passing**, 6 deselected, 0 skipped; 17 scenarios + 20 contracts covered, plus 98 UI and 46 hardening tests |
 | Screenshots | ~10 states | **0** |
 | Evaluation metrics | 24 | **13 measured**, **4 explicitly not measured**, 1 negative finding (abstention, R-24), 1 calibration nuance (lexical paraphrase limit, D-26). §9 |
 | Commits attributable to a named student | 2 | **1 of 2.** `fd2be70` is attributed; `9772226` (all of Phases 0–6) carries the git default placeholder author and cannot be decomposed (B-05) |
@@ -72,7 +72,7 @@ repository.** They are historical report claims and are recorded in
 | RAM | present | **MEASURED** | peak RSS recorded during the measurement run: 191.3 MB |
 | OS build | Windows 11, build 26300 | **MEASURED** | `platform.platform()` in `tests/data/metrics.json` |
 | GPU | none by design (CPU-only) | VERIFIED (by design) | NFR-02 target; no `torch.cuda` reference in `src/` |
-| CI green on a fresh clone | — | **FAILING** | run 37835567623: `windows-latest` and `security-sweep` pass, `ubuntu-latest` **fails** at the pytest step. Root cause unidentified (B-08) |
+| CI green on a fresh clone | — | **FIXED, not yet re-run** | run 37835567623: `windows-latest` and `security-sweep` passed, `ubuntu-latest` failed. Cause: Windows path literals resolving to one filename on POSIX, silently skipping the `tests/data/` tests. Fixed in PR #1 (B-08) |
 
 ## 6. Automated test evidence
 

@@ -198,7 +198,7 @@ support score and retrieval relevance as **separately labelled rows**.
 
 ## 10. Testing
 
-**402 tests, 402 passed, 0 failed, 0 skipped, 0 xfailed.** Captured output:
+**405 tests, 405 passed, 0 failed, 0 skipped, 0 xfailed.** Captured output:
 [logs/02_test_suite_offline.txt](../logs/02_test_suite_offline.txt).
 
 | Suite | Tests | Covers |
@@ -433,7 +433,7 @@ Stated plainly so the gap is not mistaken for oversight:
 |---|---|---|
 | Screenshots S1?S9 | Not captured. None would be fabricated | a human at the screen (7.2) |
 | Per-member contribution split | Two commits exist; the Phases 0-6 one carries a placeholder author, so it cannot decompose into three contributions (?13) | **B-05** ? disclosure chosen over rewriting history |
-| **Green CI run** | `ubuntu-latest` **fails**; `windows-latest` and `security-sweep` pass. Root cause not identified | **B-08** |
+| **Green CI run** | `ubuntu-latest` failed because three paths used Windows string literals, which on POSIX resolve to one filename and **silently skipped** the evaluation tests. Fixed; green run not yet observed | **B-08** |
 | Semantic-profile figures | No model weights on this machine | download + time |
 | Greyscale / keyboard / viewport checks | Require a person looking at a screen | Phase 7 manual pass |
 | Evaluation cases for the antonym branch | The 24-case set contains no antonym pair, so a corrected branch stays unmeasured | **R-25** ? 3-4 cases would close it |

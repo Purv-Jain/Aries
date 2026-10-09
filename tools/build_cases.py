@@ -36,7 +36,10 @@ from src.chunking import chunk_pages  # noqa: E402
 from src.pdf_ingestion import load_document  # noqa: E402
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CASES_PATH = PROJECT_ROOT / r"tests\data\eval_cases.jsonl"
+# Joined component by component, never as one r"a\b\c" literal: on POSIX a backslash is a
+# legal filename character, so the literal becomes one long filename and the path never
+# resolves. That bug shipped in tests/test_hardening.py and failed only on ubuntu.
+CASES_PATH = PROJECT_ROOT / "tests" / "data" / "eval_cases.jsonl"
 STAGE2_PDF = (
     Path.home() / "Downloads" / ".pdf" / "FAI_PE_Microproject_Stage_2_Report_Revised.pdf"
 )

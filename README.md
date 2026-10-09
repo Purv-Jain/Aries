@@ -2,7 +2,7 @@
 
 **Status:** Phase 7 in progress — built, tested, calibrated, measured, and the Stage 3 report drafted.
 **Current gate:** `PHASE 7 ACTIVE — GATE G7 NOT YET PASSED`
-**Tests:** `pytest -q` → **402 passed, 6 deselected**, 0 failures (2026-10-08)
+**Tests:** `pytest -q` → **405 passed, 6 deselected**, 0 failures (2026-10-08)
 **Run it:** `streamlit run app.py`
 **Last updated:** 2026-10-08
 
@@ -195,8 +195,10 @@ nothing depends on colour alone. Full spec in
    `APPROVE PHASE N` instruction.
 7. **"Measured" is not "written".** The semantic-profile tests exist and are deselected by default;
    they have never been run because the weights are absent. They are not passing.
-8. **CI runs, and ubuntu fails.** `windows-latest` and `security-sweep` pass; `offline (ubuntu-latest)`
-   fails at the pytest step, root cause unidentified. Nothing here may be called "CI-verified".
+8. **CI is not yet green.** The `ubuntu-latest` job failed because three paths were built from
+   Windows-style string literals, which resolve to a single filename on POSIX and made the
+   evaluation tests skip silently. Fixed in PR #1, with a guard test. Until a green run is
+   observed, nothing here may be called "CI-verified".
 9. **Report the bad results.** Abstention measured 0.000 (R-24). It is in this README and in the
    evidence tracker for the same reason the good numbers are: a report that shows only favourable
    measurements is not measurable, it is marketing.
@@ -207,7 +209,7 @@ nothing depends on colour alone. Full spec in
 python -m venv .venv
 .venv\Scripts\activate                      # Windows
 pip install -r requirements.txt             # verified working on CPython 3.14.6
-pytest -q                                   # 402 passed, 6 deselected as of 2026-10-08
+pytest -q                                   # 405 passed, 6 deselected as of 2026-10-08
 pytest -q -m semantic                       # needs MiniLM + FLAN-T5 weights; never run yet
 streamlit run app.py                        # the application
 python run_demo.py --pdf <path>             # CLI: index -> ask -> verify, exit 0/1/2
@@ -220,7 +222,7 @@ python tools/measure.py --pdf <path>        # latency, Recall@k, RAM, determinis
 repository** (B-07). Without it they skip rather than fail.
 
 Use the pinned interpreter. `C:\Python314\python.exe` happens to have most of the stack, but the
-**verified** environment is `.venv`, and that is where all 402 passing tests were observed.
+**verified** environment is `.venv`, and that is where all 405 passing tests were observed.
 
 ## Licence and attribution
 

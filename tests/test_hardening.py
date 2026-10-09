@@ -32,6 +32,10 @@ from pathlib import Path
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+# Joined component by component, never as one r"a\b\c" literal. On POSIX a backslash is a legal
+# filename character, so the literal becomes one long filename and the path never resolves. That
+# silently skipped these tests on ubuntu rather than failing them, which is why the ubuntu CI job
+# failed while the suite passed everywhere else. Fixed in PR #1.
 CASES_PATH = PROJECT_ROOT / "tests" / "data" / "eval_cases.jsonl"
 RESULTS_PATH = PROJECT_ROOT / "tests" / "data" / "eval_results.json"
 METRICS_PATH = PROJECT_ROOT / "tests" / "data" / "metrics.json"
@@ -467,6 +471,59 @@ print("indexed", report.total_chunks, "claims", len(response.verifications))
 # --------------------------------------------------------------------------
 # The metrics exist and record their method
 # --------------------------------------------------------------------------
+
+
+class TestPathsAreCrossPlatform:
+    """No path may be built from a backslash-separated string literal.
+
+    `PROJECT_ROOT / r"tests\\data\\eval_cases.jsonl"` looks correct and works on Windows. On POSIX a
+    backslash is an ordinary filename character, so the whole literal becomes a single filename,
+    `.exists()` returns False, and any test guarded on it **skips silently** rather than failing.
+    That is the worst shape a cross-platform bug can take: the suite reports green on Linux while a
+    chunk of it never ran, and the only symptom is a red CI job on one OS.
+
+    PR #1 fixed three literals in this file; the identical literal in tools/build_cases.py was
+    missed. These tests exist so the next one cannot be added unnoticed.
+    """
+
+    def _python_paths(self) -> list[Path]:
+        roots = [PROJECT_ROOT / "src", PROJECT_ROOT / "tools"]
+        roots += [PROJECT_ROOT / f for f in ("app.py", "run_demo.py", "conftest.py")]
+        roots += sorted((PROJECT_ROOT / "tests").glob("*.py"))
+        return [p for root in roots for p in (root.glob("*.py") if root.is_dir() else [root])
+                if p.exists()]
+
+    #: A path join whose right-hand side is a string literal containing a backslash.
+    BACKSLASH_PATH = re.compile(
+        r"""=\s*\w+\s*/\s*r?["'][^"']*\\[^"']*["']"""
+    )
+
+    def test_no_source_file_builds_a_path_from_a_backslash_literal(self) -> None:
+        # Legitimate escapes -- the PDF fixture bytes in tests/conftest.py, the comment-stripping
+        # regex in test_ui.py, the sanitiser's own `filename.replace("\\", "/")` -- are not path
+        # joins, so they do not match.
+        offenders = [
+            f"{path.relative_to(PROJECT_ROOT)}: {match.group(0)[:70]}"
+            for path in self._python_paths()
+            for match in [self.BACKSLASH_PATH.search(path.read_text("utf-8"))]
+            if match
+        ]
+        assert offenders == [], f"backslash path literals: {offenders}"
+
+    def test_the_pattern_this_file_guards_is_not_vacuous(self) -> None:
+        # A guard that cannot fail is worse than no guard, so prove it still fires on the exact
+        # shape PR #1 removed.
+        needle = 'X = ROOT / r"tests' + '\\\\' + 'data' + '\\\\' + 'cases.jsonl"'
+        assert self.BACKSLASH_PATH.search(needle)
+        assert not self.BACKSLASH_PATH.search('X = ROOT / "tests" / "data" / "cases.jsonl"')
+
+    def test_the_declared_paths_actually_exist(self) -> None:
+        # The consequence stated above: a wrong path skips silently. This asserts existence directly,
+        # so a future rename of tests/data/ fails here instead of quietly disabling the suite.
+        for path in (CASES_PATH, RESULTS_PATH, METRICS_PATH):
+            if not path.exists():
+                pytest.skip(f"{path.name} is not present in this checkout")
+            assert path.exists() and path.is_file()
 
 
 class TestMetricsArePresent:

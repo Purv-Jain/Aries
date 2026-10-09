@@ -11,7 +11,7 @@ Intel64 Family 6 Model 154, 8 logical CPUs, CPython 3.14.6, no GPU, `.venv` with
 | # | File | Command | What it proves |
 |---|---|---|---|
 | 01 | [01_environment.txt](01_environment.txt) | `python --version`, `platform.platform()`, `pip list --format=freeze` | The interpreter and exact dependency set every other figure was produced on |
-| 02 | [02_test_suite_offline.txt](02_test_suite_offline.txt) | `pytest -q -m "not semantic"` with all three `*_OFFLINE=1`, then `pip check` | **402 passed, 6 deselected**, 0 failures, 0 skipped, 0 xfailed |
+| 02 | [02_test_suite_offline.txt](02_test_suite_offline.txt) | `pytest -q -m "not semantic"` with all three `*_OFFLINE=1`, then `pip check` | **405 passed, 6 deselected**, 0 failures, 0 skipped, 0 xfailed |
 | 03 | [03_run_demo.txt](03_run_demo.txt) | `run_demo.py --pdf <report> --question "Which sentence splitter…"` | A full index → ask → verify cycle on the real 15-page paper: 15 pages → 46 chunks, 5 claims verified, wall time 0.43 s |
 | 04 | [04_measure.txt](04_measure.txt) | `python -X utf8 tools\measure.py` | The 13 measured metrics: Recall@1 0.667, Recall@3+ 1.0, MRR 0.778, indexing 3.236 s/100 pages, query p50 12.40 ms, determinism 1.0, peak RSS 191.3 MB, **abstention 0.0** |
 | 05 | [05_evaluate.txt](05_evaluate.txt) | `python -X utf8 tools\evaluate.py --sweep`, then `tools\build_cases.py` | The threshold sweep 0.30→0.90 and the chosen point 0.63; plus `verbatim check: all 24 passages found in the extraction` |
@@ -22,7 +22,7 @@ Intel64 Family 6 Model 154, 8 logical CPUs, CPython 3.14.6, no GPU, `.venv` with
 
 ## The three logs that matter most
 
-**02** is the reproducibility claim. 402 tests, no network, no model download, on a machine whose only
+**02** is the reproducibility claim. 405 tests, no network, no model download, on a machine whose only
 Python is the pinned one.
 
 **04 and 05** are the measurement claim. Every number in the Stage 3 report appears here first.
