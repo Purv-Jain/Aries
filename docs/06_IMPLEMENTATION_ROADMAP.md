@@ -339,7 +339,7 @@ Three notes on what building the UI changed in the design:
 - [x] All metrics measured or explicitly marked *not measured* — 13 measured, 4 explicitly not
 - [x] Thresholds justified by the labelled set, with the trade-off shown — `verified_threshold` moved 0.62 → **0.63**; sweep in §7d
 - [x] Zero high-severity security findings — 46 hardening tests; the sweep found no `eval`/`exec`, no secrets, no network on the default path, no writes in `src/`
-- [ ] **CI green on a fresh clone — NOT MET.** The workflow is written and locally verified, but **this directory is still not a git repository** (B-05), so it has never run. Claiming it green would be claiming a result for something that has not happened.
+- [ ] **CI green — NOT MET, and now observably red.** The workflow runs against a real repository (B-05 resolved): `windows-latest` and `security-sweep` **pass**, `ubuntu-latest` **fails** at the pytest step (run 37835567623). Root cause not yet identified — the Actions log API needs a token. Claiming it green would be claiming a result that has not happened.
 - [x] Fresh-venv reproducibility — a second venv built from `requirements.txt` alone: 371 passed (pre-Phase-7-fix run; the current suite is 378)
 
 **The determinism result needed a correction to be honest.** The first version of the test compared

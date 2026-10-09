@@ -15,8 +15,8 @@
 | **Phase in progress** | **7** (Stage 3 readiness) — report **drafted** at [16_STAGE_3_REPORT_DRAFT.md](16_STAGE_3_REPORT_DRAFT.md), logs captured in [logs/](../logs/README.md) |
 | **G7 blocked on** | **Screenshots S1–S9** (no human at a screen), **B-05** (no repository ⇒ no contribution table, no CI), semantic-profile figures (no weights) |
 | **Tests written** | **402** across `test_core.py` (64), `test_retrieval.py` (80), `test_verification.py` (114), `test_ui.py` (98), `test_hardening.py` (46) |
-| **Commits made** | 0 — **this directory is not a git repository** (B-05) |
-| **CI** | Workflow written at `.github/workflows/tests.yml`. **It has never run** — there is no repository to run it in. |
+| **Commits made** | **2** — `fd2be70` (Phase 7, attributed) and `9772226` (Phases 0–6, **placeholder author**, B-05) |
+| **CI** | **Runs, and `ubuntu-latest` fails.** `windows-latest` and `security-sweep` pass; the offline suite fails on ubuntu at the pytest step. Root cause unidentified (B-08) |
 | **Model weights downloaded** | 0 — semantic and abstractive paths written, **unmeasured** |
 | **Calibrated** | `verified_threshold` 0.62 → **0.63**, from a 24-case labelled set; false-`Verified` 0.125 → **0.000** |
 | **Metrics measured** | 13 of 24. 4 explicitly **not measured** (model load, semantic-profile figures, FLAN-T5 marker coverage, semantic determinism) |
@@ -140,14 +140,25 @@
 | ~~B-02~~ | ~~Python version undecided~~ | — | **RESOLVED** — pinned 3.14.6, ADR-0001 accepted | — |
 | ~~B-03~~ | ~~`chromadb` not installed~~ | — | **RESOLVED** — installed 1.5.9, persists and reloads on 3.14.6 | — |
 | ~~B-04~~ | ~~Phase 2 fixtures not built~~ | — | **RESOLVED** — generated in-process by `tests/conftest.py::build_pdf` | — |
-| **B-05** | **This directory is not a git repository** | Contribution evidence (7.4), CI (6.10) | `git init` + remote + a decision on authorship per commit | Human |
+| **B-05** | **The Phase 0-6 commit carries a placeholder author** | Per-member contribution table (report §13, item 7.4) | **PARTLY RESOLVED, disclosure chosen over rewriting history.** A repository now exists at [Purv-Jain/Aries](https://github.com/Purv-Jain/Aries) with two commits. `9772226` (all of Phases 0-6) was authored by the git default placeholder `Your Name <your.email@example.com>`, because the repo was created before the identity was configured; `fd2be70` (Phase 7) is correctly attributed to `Purv-Jain <purv.jain24@sakec.ac.in>`. The placeholder commit **cannot be decomposed** into three contributions, so no per-member split is derivable. Rewriting it was considered and **rejected**: it changes a commit on a public remote, invalidates it for anyone who cloned, and needs both teammates to coordinate. Correct it after submission. | Human |
 | **B-06** | ~~No real academic PDF in the repo~~ | R-11 | **RESOLVED for measurement** — the team's own Stage 2 report (15 pages) was used as the fixture. See **B-07** for the remaining issue | — |
 | **B-07** | **The fixture PDF lives in `~/Downloads/.pdf/`, outside the project** | Reproducing the calibration on a fresh clone | A decision: commit the report under `tests/data/`, or document that `tools/evaluate.py` requires a local copy | Human |
-| **B-08** | **CI has never run** — the workflow exists but there is no repository to run it in | Gate G6 item | Follows from B-05 | Human |
+| **B-08** | **CI runs, and `ubuntu-latest` fails.** `windows-latest` and `security-sweep` pass; the offline suite fails on ubuntu at the pytest step. Root cause **not yet identified** — the Actions log API returns 403 without a token and `gh` is not installed | Gate G6 item | The `FAILED ...` lines from [run 37835567623](https://github.com/Purv-Jain/Aries/actions/runs/37835567623/job/113511585205), or `gh run view 37835567623 --log-failed` | Human |
 
-B-05, B-07 and B-08 are the only remaining blockers, and all three resolve with a single
-human decision: create the repository. Nothing is blocked on external parties, network access,
-or funding.
+**B-05 is partly resolved** — the repository exists and Phase 7 is correctly attributed; the
+Phase 0–6 commit keeps its placeholder author by deliberate decision. **B-08 has moved from
+"never run" to "runs and fails on ubuntu"**, which is a different problem with a different fix.
+
+Remaining blockers and what each needs:
+
+| # | Needs |
+|---|---|
+| **B-05** | Post-submission history rewrite, or leave it — disclosure is already in report §13 |
+| **B-07** | A decision on whether the fixture PDF may be committed |
+| **B-08** | The failing ubuntu test name, which needs a token or `gh` |
+
+Nothing is blocked on external parties, network access, or funding. Everything outstanding needs
+either a decision or a pair of hands.
 
 ## 7. Test results
 

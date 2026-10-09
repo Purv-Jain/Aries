@@ -195,8 +195,8 @@ nothing depends on colour alone. Full spec in
    `APPROVE PHASE N` instruction.
 7. **"Measured" is not "written".** The semantic-profile tests exist and are deselected by default;
    they have never been run because the weights are absent. They are not passing.
-8. **CI is not running.** `.github/workflows/tests.yml` exists and has never executed — this
-   directory is not a git repository. Nothing here may be called "CI-verified".
+8. **CI runs, and ubuntu fails.** `windows-latest` and `security-sweep` pass; `offline (ubuntu-latest)`
+   fails at the pytest step, root cause unidentified. Nothing here may be called "CI-verified".
 9. **Report the bad results.** Abstention measured 0.000 (R-24). It is in this README and in the
    evidence tracker for the same reason the good numbers are: a report that shows only favourable
    measurements is not measurable, it is marketing.

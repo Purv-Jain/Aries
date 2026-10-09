@@ -360,12 +360,50 @@ profile buys over the offline one.
 
 ## 13. Individual contributions
 
-> **This section cannot be completed.** This directory is not a git repository (blocker **B-05**), so
-> `git log --author=` has no output. The report's contribution table must be assembled from real
-> commit history and reconciled against the file-level attribution in
-> [13_TEAM_CONTRIBUTIONS.md](13_TEAM_CONTRIBUTIONS.md). Phases 4–6 were largely executed by one AI
-> agent working from these documents; attributing lines to a named student without a commit to prove
-> it would be the fabrication this report exists to avoid. No claim is made here in the meantime.
+> **A repository now exists, and one of its two commits carries a placeholder author. Both facts are
+> stated here rather than smoothed over.**
+
+Commit history as recorded by `git log --pretty=format:"%h %an <%ae> %ad %s" --date=short`:
+
+| Commit | Author | Scope |
+|---|---|---|
+| `fd2be70` | `Purv-Jain <purv.jain24@sakec.ac.in>` | Phase 7: Stage 3 report draft, reproducible logs, five verifier defects fixed |
+| `9772226` | `Your Name <your.email@example.com>` | Phases 0?6: the whole implementation |
+
+`9772226` was authored with the git default placeholder identity ? the repository was created before
+the author's name and email were configured. That commit covers **every line of production code and
+all but the most recent tests**. It is therefore not usable as evidence of who wrote what.
+
+Two statements follow, and neither is flattering:
+
+1. **`git log --author=` cannot produce this table.** A single commit cannot decompose into three
+   contributions. Any per-member figure derived from it would be invented.
+2. **Phases 4?6 were largely executed by one AI agent** working from these documents, on the
+   direction of the team. Attributing lines to a named student without a commit to prove it is the
+   fabrication this report exists to prevent.
+
+What can be stated honestly is **file-level attribution** ? who authored which file in this
+workspace ? and even that is partly reconstruction, recorded in
+[13_TEAM_CONTRIBUTIONS.md](13_TEAM_CONTRIBUTIONS.md) as such.
+
+### 13.1 What was decided, and why
+
+The option of rewriting `9772226` to attach a correct author was considered and **rejected**. It
+changes a commit already pushed to a public repository, invalidates it for anyone who has cloned it,
+and requires coordinating two teammates mid-project. A placeholder author on early work is a
+documentation defect, not misconduct, and the remedy costs more in trust than the defect does.
+
+The chosen remedy is disclosure: the placeholder is visible in the commit log, stated in this
+section, and recorded as **B-05** in the risk register. Fixing it properly is Phase 7 work, after
+submission, when rewriting history is cheap because nothing depends on it.
+
+### 13.2 What a reader should conclude
+
+The **implementation** is real, tested and measured ? ?10 and ?11 stand on their own, and every number
+in them is reproducible from a command in [logs/](../logs/README.md). What cannot be established from
+this repository is **which of the three students wrote which part**. On the evidence available, that
+question is open, and the honest position is to say so rather than to produce a table that looks
+better than the record supports.
 
 ## 14. References
 
@@ -393,11 +431,12 @@ Stated plainly so the gap is not mistaken for oversight:
 
 | Missing | Why | Blocked on |
 |---|---|---|
-| Screenshots S1–S9 | Not captured. None would be fabricated | a human at the screen (7.2) |
-| Contribution table | No commit history exists | **B-05** — `git init` |
-| CI run | Workflow written, never executed | **B-05** → **B-08** |
+| Screenshots S1?S9 | Not captured. None would be fabricated | a human at the screen (7.2) |
+| Per-member contribution split | Two commits exist; the Phases 0-6 one carries a placeholder author, so it cannot decompose into three contributions (?13) | **B-05** ? disclosure chosen over rewriting history |
+| **Green CI run** | `ubuntu-latest` **fails**; `windows-latest` and `security-sweep` pass. Root cause not identified | **B-08** |
 | Semantic-profile figures | No model weights on this machine | download + time |
 | Greyscale / keyboard / viewport checks | Require a person looking at a screen | Phase 7 manual pass |
+| Evaluation cases for the antonym branch | The 24-case set contains no antonym pair, so a corrected branch stays unmeasured | **R-25** ? 3-4 cases would close it |
 
 **Gate G7 is not passed.** See
 [15_PROGRESS_TRACKER.md](15_PROGRESS_TRACKER.md#1-current-status).

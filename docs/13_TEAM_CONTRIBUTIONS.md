@@ -1,6 +1,6 @@
 # 13 — Team Contributions
 
-**Status:** Phase 3 baseline · Last updated 2026-10-08 · **No commits exist — the workspace is not yet a git repository**
+**Status:** Phase 7 baseline · Last updated 2026-10-08 · **Two commits exist; the Phases 0–6 one carries a placeholder author** (B-05)
 **Related:** [Charter §7](00_PROJECT_CHARTER.md#7-stakeholders-and-roles) · [Evidence Tracker §11](12_STAGE_3_EVIDENCE_TRACKER.md#11-contribution-evidence) · [Roadmap](06_IMPLEMENTATION_ROADMAP.md)
 
 ---
@@ -101,80 +101,58 @@ No feature merges without a second reader.
 | 6 | Bhavya | All |
 | 7 | All | All |
 
-## 5. Verified contributions (TO BE FILLED FROM GIT)
+## 5. Verified contributions
 
-**Still empty after Phase 6 — and not because nothing was written, because there is nothing to
-read.** `git status` in this directory returns `fatal: not a git repository`. Phases 2 to 6 produced
-nine source modules, a five-file test suite of **402 passing tests**, four CLI/measurement tools and
-the full document set, and **none of it is under version control** (blocker **B-05** in
-[15_PROGRESS_TRACKER.md §6](15_PROGRESS_TRACKER.md#6-blockers)).
+### 5.1 What the commit history actually shows
 
-This is a real risk to the Stage 3 submission, not a formality: the report's contribution table must
-be assembled from `git log --author=`, and right now that command has no output to give. Creating the
-repository needs a human decision about remotes and authorship. Phase 7 item 7.4 cannot start
-without it.
+A repository now exists. Two commits:
 
-Until then, the only honest record is **file authorship in this workspace**, and file authorship is
-not commit authorship:
-
-| Member | Files attributed in this workspace | Commits (real hash + subject + date) | Status |
-|---|---|---|---|
-| Rishabh Jain | `src/verifier.py`, `tests/test_verification.py` — **which lines were written by which person is not recorded anywhere reliable** | _none yet_ | IMPLEMENTED, uncommitted |
-| Purv Jain | `src/models.py`, `src/__init__.py`, `src/embeddings.py`, `src/vector_store.py`, `src/pipeline.py`, `src/generator.py`, `app.py`, `run_demo.py`, `conftest.py`, `requirements.txt`, `pytest.ini` | _none yet_ | IMPLEMENTED, uncommitted |
-| Bhavya Soni | `src/pdf_ingestion.py`, `src/chunking.py`, `tests/conftest.py`, `tests/test_core.py`, `tests/test_hardening.py`, `tools/build_cases.py`, `tools/evaluate.py`, `tools/measure.py`, `.github/workflows/tests.yml` | _none yet_ | IMPLEMENTED, uncommitted |
-
-**The statement this table cannot make.** Phases 4 to 6 were largely executed by one AI agent working
-from these documents. Attributing lines to a named student without a commit to prove it would be the
-fabrication this document exists to prevent, so the column above is labelled "attributed in this
-workspace" and nothing stronger. When the repository exists, Phase 7 must reconcile this against real
-`git log` output and correct it if the two disagree.
-
-Procedure once a repository exists:
+| Commit | Author | Scope |
+|---|---|---|
+| `fd2be70` | `Purv-Jain <purv.jain24@sakec.ac.in>` | Phase 7 ? Stage 3 report draft, reproducible logs, five verifier defects fixed |
+| `9772226` | `Your Name <your.email@example.com>` | Phases 0?6 ? the entire implementation |
 
 ```bash
-git log --author="Rishabh" --pretty=format:"%h %ad %s" --date=short
-git log --author="Purv"    --pretty=format:"%h %ad %s" --date=short
-git log --author="Bhavya"  --pretty=format:"%h %ad %s" --date=short
+git log --pretty=format:"%h %an <%ae> %ad %s" --date=short
 git shortlog -sne --all
 ```
 
-| Member | Commits (real hash + subject + date) | Files materially authored | Tests owned | Review given | Status |
-|---|---|---|---|---|---|
-| Rishabh Jain | _none yet_ | _none yet_ | _none yet_ | _none yet_ | PLANNED |
-| Purv Jain | _none yet_ | _none yet_ | _none yet_ | _none yet_ | PLANNED |
-| Bhavya Soni | _none yet_ | _none yet_ | _none yet_ | _none yet_ | PLANNED |
+`9772226` was authored with the **git default placeholder identity** ? the repository was created
+before a name and email were configured. It contains every line of production code and all but the
+most recent tests. **It cannot be decomposed into per-member contributions**, and no table derived
+from it would be anything but invention.
 
-### 5.1 What counts as evidence of contribution
+### 5.2 The decision, and why disclosure beat a rewrite
 
-| Counts | Does not count |
-|---|---|
-| Commits authored by the person's own Git account | Commits that existed before Stage 3 (Stage 2's four hashes) |
-| Substantive changes to a module they own | A one-line whitespace fix |
-| Tests that fail without their change | Tests copied from a teammate unchanged |
-| A written review that changed a decision | Being listed in a RACI table |
-| Documented design decisions they authored | Being named as a team |
+Rewriting `9772226` to attach the correct author was considered and **rejected**:
 
-### 5.2 Branch and commit conventions
+- it changes a commit already pushed to a **public** repository;
+- it invalidates that commit for anyone who has cloned it;
+- it needs both teammates to coordinate mid-project;
+- and it buys tidiness, not accuracy ? the placeholder author is a documentation defect, not
+  misconduct, so the remedy would cost more in trust than the defect does.
 
-Adopted from Stage 2 §3.3:
+**Chosen: disclose.** The placeholder is visible in the log, stated in report
+[?13](16_STAGE_3_REPORT_DRAFT.md#13-individual-contributions), and tracked as **B-05**. Correcting
+it properly is post-submission work, when a rewrite is cheap because nothing depends on it.
 
-| Convention | Value |
-|---|---|
-| Branches | `main`, `feature/ingestion`, `feature/chunking`, `feature/retrieval`, `feature/verifier`, `feature/ui`, `feature/tests`, `docs/*` |
-| `main` invariant | Only code that passes the current test suite |
-| Merge rule | Owner runs tests → another member reviews → merge |
-| Commit format | Conventional prefixes: `feat:`, `fix:`, `test:`, `docs:`, `refactor:`, `chore:` |
-| Conflict rule | Compare *intended behaviour*, re-run tests after merge. Never blind "ours/theirs" |
+### 5.3 File-level attribution, and its limits
 
-Branch → ownership mapping:
+This is **not** commit authorship and must never be presented as such. It records who authored which
+file in this workspace, and for Phases 4?6 it is partly reconstruction:
 
-| Branch | Owner |
-|---|---|
-| `feature/ingestion`, `feature/chunking` | Bhavya |
-| `feature/embeddings`, `feature/store`, `feature/pipeline`, `feature/ui` | Purv |
-| `feature/verifier`, `feature/evaluation` | Rishabh |
-| `feature/tests`, `feature/ci` | Bhavya |
-| `docs/*` | whoever authored the content; Bhavya integrates |
+| Member | Files attributed in this workspace | Commits |
+|---|---|---|
+| Rishabh Jain | `src/verifier.py`, `tests/test_verification.py` ? **which lines were written by which person is not recorded anywhere reliable** | `9772226` only (placeholder author) |
+| Purv Jain | `src/models.py`, `src/__init__.py`, `src/embeddings.py`, `src/vector_store.py`, `src/pipeline.py`, `src/generator.py`, `app.py`, `run_demo.py`, `conftest.py`, `requirements.txt`, `pytest.ini` | `fd2be70`, `9772226` |
+| Bhavya Soni | `src/pdf_ingestion.py`, `src/chunking.py`, `tests/conftest.py`, `tests/test_core.py`, `tests/test_hardening.py`, `tools/*.py`, `.github/workflows/tests.yml` | `9772226` only (placeholder author) |
+
+### 5.4 The statement this table cannot make
+
+Phases 4 to 6 were largely executed by **one AI agent** working from these documents, on the team's
+direction. Attributing lines to a named student without a commit to prove it would be the fabrication
+this document exists to prevent ? so nothing stronger than the above is claimed, and the conclusion a
+reader should draw is that **the per-member split is not established by the available evidence**.
 
 ## 6. Timeline of contribution (to be recorded)
 

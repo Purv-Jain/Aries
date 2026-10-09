@@ -30,7 +30,7 @@ Anything else stays empty. An empty `Evidence` cell means the claim cannot go in
 | Automated tests | 17 scenarios + 20 contracts | **402 passing**, 6 deselected, 0 skipped; 17 scenarios + 20 contracts covered, plus 98 UI and 46 hardening tests |
 | Screenshots | ~10 states | **0** |
 | Evaluation metrics | 24 | **13 measured**, **4 explicitly not measured**, 1 negative finding (abstention, R-24), 1 calibration nuance (lexical paraphrase limit, D-26). §9 |
-| Commits attributable to a named student | 0 | **0** — *and the directory is not a git repository (B-05)* |
+| Commits attributable to a named student | 2 | **1 of 2.** `fd2be70` is attributed; `9772226` (all of Phases 0–6) carries the git default placeholder author and cannot be decomposed (B-05) |
 | Architectural decisions documented | 13 ADRs | **13** (1 Accepted, 12 Proposed) |
 
 **Stage 2's "10/10 tests, 28 chunks, 4 commits" belong to a prior prototype that is not in this
@@ -72,7 +72,7 @@ repository.** They are historical report claims and are recorded in
 | RAM | present | **MEASURED** | peak RSS recorded during the measurement run: 191.3 MB |
 | OS build | Windows 11, build 26300 | **MEASURED** | `platform.platform()` in `tests/data/metrics.json` |
 | GPU | none by design (CPU-only) | VERIFIED (by design) | NFR-02 target; no `torch.cuda` reference in `src/` |
-| CI green on fresh clone | — | **BLOCKED** | workflow exists and parses, but **has never run** — there is no repository (B-05 → B-08) |
+| CI green on a fresh clone | — | **FAILING** | run 37835567623: `windows-latest` and `security-sweep` pass, `ubuntu-latest` **fails** at the pytest step. Root cause unidentified (B-08) |
 
 ## 6. Automated test evidence
 
@@ -363,7 +363,9 @@ so each question is worth 0.111.
 
 ## 11. Contribution evidence
 
-**No commits exist, and this directory is not a git repository** (blocker **B-05**). This table must
+**Two commits exist.** `fd2be70` (Phase 7) is correctly attributed; `9772226` (Phases 0–6, the whole
+implementation) carries the git default placeholder author and therefore cannot be decomposed into
+per-member contributions. Disclosed in report §13; rewriting was considered and rejected (B-05). This table must
 be filled from `git log --author=...` at the end, never from memory or intention. See
 [13_TEAM_CONTRIBUTIONS.md](13_TEAM_CONTRIBUTIONS.md).
 
