@@ -290,9 +290,9 @@ full JSON is in [tests/data/metrics.json](../tests/data/metrics.json) and
 | Chosen `verified_threshold` | **0.63** | swept 0.30→0.90; highest-F1 point with false-`Verified` = 0 | **MEASURED** |
 | Determinism rate (offline) | **1.000** (5/5) | answer + verifications byte-identical; timings excluded, see tracker §6.1b | **MEASURED** |
 | Determinism rate (semantic) | `not measured` | — | **Pending — needs MiniLM** |
-| Indexing latency | **2.67 s / 100 pages** | 3 runs, fresh pipeline each; median 0.400 s for 15 pages | **MEASURED** |
-| Query latency p50 / p95 | **12.86 / 16.00 ms** (max 19.31 ms, n=27) | after warm-up, offline profile | **MEASURED** |
-| Peak RAM | **191.6 MB** (baseline 190.1 MB) | sampled after each stage; +1.5 MB for the corpus | **MEASURED** |
+| Indexing latency | **3.236 s / 100 pages** | 3 runs, fresh pipeline each; median 0.486 s for 15 pages | **MEASURED** |
+| Query latency p50 / p95 | **12.40 / 15.55 ms** (max 16.35 ms, n=27) | after warm-up, offline profile | **MEASURED** |
+| Peak RAM | **191.3 MB** (baseline 190.0 MB) | sampled after each stage; +1.3 MB for the corpus | **MEASURED** |
 | Model load time | `not measured` | — | **Pending — no model has ever been loaded here** |
 
 ### The two results that must not be reported without their caveats

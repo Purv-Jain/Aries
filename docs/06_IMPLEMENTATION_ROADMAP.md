@@ -332,15 +332,15 @@ Three notes on what building the UI changed in the design:
 **Result: PASSED 2026-10-08, with one requirement explicitly not met.** Evidence in
 [15_PROGRESS_TRACKER.md §7](15_PROGRESS_TRACKER.md#7-test-results) and §7d.
 
-- [x] `pytest -q` green, real output pasted into the tracker — **371 passed, 6 deselected**
+- [x] `pytest -q` green, real output pasted into the tracker — **402 passed, 6 deselected**
 - [x] EC-01→EC-17 all covered — 16 automated, 1 half-covered by design
-- [x] Offline run proven with the network disabled — 371 passed with `socket.connect` replaced by a function that raises, then a full index→ask→verify cycle
+- [x] Offline run proven with the network disabled — 402 passed with `socket.connect` replaced by a function that raises, then a full index→ask→verify cycle
 - [x] Determinism regression test passes — 1.0 over 5 runs, excluding wall-clock timings (see below)
 - [x] All metrics measured or explicitly marked *not measured* — 13 measured, 4 explicitly not
 - [x] Thresholds justified by the labelled set, with the trade-off shown — `verified_threshold` moved 0.62 → **0.63**; sweep in §7d
 - [x] Zero high-severity security findings — 46 hardening tests; the sweep found no `eval`/`exec`, no secrets, no network on the default path, no writes in `src/`
 - [ ] **CI green on a fresh clone — NOT MET.** The workflow is written and locally verified, but **this directory is still not a git repository** (B-05), so it has never run. Claiming it green would be claiming a result for something that has not happened.
-- [x] Fresh-venv reproducibility — a second venv built from `requirements.txt` alone: 371 passed
+- [x] Fresh-venv reproducibility — a second venv built from `requirements.txt` alone: 371 passed (pre-Phase-7-fix run; the current suite is 378)
 
 **The determinism result needed a correction to be honest.** The first version of the test compared
 the full serialised response and reported **0.2**. The only differing fields were the five
@@ -386,11 +386,32 @@ omission.
 
 ### Gate G7
 
-- [ ] Every quantitative claim traces to an artifact
-- [ ] No fabricated numbers, screenshots, commits, or rates anywhere
-- [ ] Team contributions reflect **actual** commit authorship
-- [ ] All three members can answer every question in the viva doc unaided
-- [ ] Deviation notes for the Python pin (ADR-0001) and any Chroma fallback
+**Result: NOT PASSED. Two boxes cannot be ticked, and one is waiting on a person.**
+
+- [x] Every quantitative claim traces to an artifact — the report draft contains no number without a
+  row in [12](12_STAGE_3_EVIDENCE_TRACKER.md) and a captured file in [logs/](../logs/README.md)
+- [x] No fabricated numbers, screenshots, commits, or rates anywhere — screenshots are **absent and
+  labelled absent**, not invented; §13 of the report is empty with the reason stated
+- [ ] **Team contributions reflect actual commit authorship — NOT MET.** `git log --author=` has no
+  output because this directory is not a repository (**B-05**). Needs `git init` and a human decision
+- [ ] **All three members can answer every question in the viva doc unaided — NOT MET.** The script is
+  updated and rehearsable ([11](11_DEMO_AND_VIVA_PREPARATION.md) is current as of Phase 7), but nobody
+  has actually run it with a person watching. Three R-23 manual UI checks are in the same position
+- [x] Deviation notes for the Python pin (ADR-0001) and any Chroma fallback — D-10 amended in
+  [01 §3](01_REQUIREMENTS.md#3-stage-2-versus-stage-1-deviations-log), and nine Stage 3 departures
+  recorded in [01 §3.1](01_REQUIREMENTS.md#31-stage-3-versus-stage-2-deviations-log)
+- [ ] **Screenshots S1–S9 captured — NOT MET.** Needs someone at a screen. See
+  [16 §15](16_STAGE_3_REPORT_DRAFT.md#15-what-this-draft-is-not-yet)
+
+**What Phase 7 did complete:** 7.1 (tracker audited), 7.3 (nine logs captured), 7.5 (report drafted
+at [16_STAGE_3_REPORT_DRAFT.md](16_STAGE_3_REPORT_DRAFT.md)), 7.6 (viva script brought current),
+7.7 (I-01 checked — the Stage 0 finding **did not reproduce**, so R-04 closes), 7.8 (deviations log
+extended to D-19).
+
+**One Phase 7 finding worth recording:** the Phase 0 audit had flagged Stage 2's reference list as
+mis-numbered. Checking the extracted text found `Magesh` and `legal research` occur zero times, and a
+citation audit found zero dangling and zero orphaned references. The defect was not there. An audit
+finding closed by measurement rather than assumed is worth more than one left standing.
 
 ## 9. Critical path
 

@@ -1,6 +1,6 @@
 # 11 — Demo & Viva Preparation
 
-**Status:** Phase 1 draft · Last updated 2026-10-08
+**Status:** Phase 7 rehearsal-ready · Last updated 2026-10-08
 **Related:** [Evidence Tracker](12_STAGE_3_EVIDENCE_TRACKER.md) · [Team Contributions](13_TEAM_CONTRIBUTIONS.md) · [Evaluation](10_EVALUATION_METRICS.md)
 
 ---
@@ -60,27 +60,46 @@ Walk through in this order:
 
 **This is the beat that matters.** Pause here.
 
-### Beat 4 — Prove it can say "no" (90 s)
+### Beat 4 — Show what it catches, and be honest about what it does not (120 s)
 
-The single most convincing moment in the demo. Do it in this order:
+> **Changed in Phase 7.** This beat previously promised that asking about an absent topic would
+> produce an abstention. **It does not.** The measured abstention rate is 0.000
+> ([R-24](14_RISK_REGISTER.md)); asking about mercury's boiling point returns five sentences with
+> real citations to irrelevant passages. Running the old beat live would have been a failure in
+> front of the examiner. Rehearse this version instead.
 
 | # | Action | Expected | Why it lands |
 |---|---|---|---|
-| 1 | Ask about something **absent** from the documents (e.g. a topic in a different field) | Abstention: *"No passage in your documents matches this question."* | It did not hallucinate |
-| 2 | Show a claim the source contradicts | `Unsupported` with `contradiction_detected` | It caught a polarity error |
-| 3 | Show a deliberately broken marker | `Unsupported`, `unresolvable_reference` | A citation that points nowhere is caught |
+| 1 | Ask a question the documents **do** answer | claims with `[Sx, p.y]`, per-claim labels | the working case |
+| 2 | Show a claim the source contradicts | `Unsupported` with `contradiction_detected` | it caught a polarity error |
+| 3 | Show a deliberately broken marker `[S7, p.1]` | `Unsupported`, `unresolvable_reference` | a citation pointing nowhere is caught |
+| 4 | **Ask about an absent topic, then say what happened** | it answers, from irrelevant passages | honesty, demonstrated not claimed |
+| 5 | Remove all documents, ask again | *"No passages match…"* — abstention **does** work on an empty index | the limit is precise, not vague |
 
-Beat 4 is worth more than three successful answers. A system that always says "yes" is exactly the
-problem we are solving.
+On step 4:
+
+> "It just answered a question that isn't in these papers — with genuine citations to sentences that
+> don't answer it. That's the real failure mode, and we measured it at 0.000. The abstention path
+> works; you can see it in step 5. What's missing is a relevance floor on the retrieved set, so
+> nothing ever gets below the threshold. It's logged as R-24."
+
+Beat 4 is worth more than three successful answers, because a system that always says "yes" is
+exactly the problem we are solving — and knowing precisely *when* this one still does is what makes
+the rest of the demonstration credible.
 
 ### Beat 5 — Show the offline guarantee (60 s)
 
 > "This entire run used TF-IDF and an extractive generator. No GPU, no API key, and — here — no
 > internet."
 
-If time permits, toggle the semantic profile and show the answer changes form (FLAN-T5) while the
-markers stay anchored to real pages. Be explicit that FLAN-T5 lowers marker coverage and explain why
-the extractive path is the default ([ADR-0011](05_TECH_STACK_AND_ADRS.md#adr-0011--optional-flan-t5-small-not-required)).
+Support it with a number rather than an assurance: 402 tests pass with `socket.connect` replaced by
+a function that raises, then a full index → ask → verify cycle run to completion
+([logs/02](../logs/02_test_suite_offline.txt)). The offline path is not permitted to try the network.
+
+**Do not toggle the semantic profile live.** There are no MiniLM or FLAN-T5 weights on this machine,
+so the toggle would attempt a download and fail on stage. If asked, say the semantic paths are
+written and their *degradation* behaviour is tested, but their success paths are unmeasured — and
+that is exactly why the offline profile is the default ([ADR-0011](05_TECH_STACK_AND_ADRS.md#adr-0011--optional-flan-t5-small-not-required)).
 
 ### Beat 6 — Close on the limitation (30 s)
 
@@ -94,9 +113,10 @@ Ending on the limitation makes everything before it more credible.
 
 - [ ] Fixture PDF staged, and a **second** PDF for the multi-document case
 - [ ] Internet **off** for the offline-profile beats
-- [ ] A known-absent question memorised (so beat 4 cannot fumble)
+- [ ] A known-absent question memorised, **and the R-24 explanation memorised with it** — it will not abstain
 - [ ] A known-contradiction case memorised
-- [ ] Screenshots of every state, each labelled *captured* with its timestamp
+- [ ] Screenshots of every state, each labelled *captured* with its timestamp — **none exist yet (7.2)**
+- [ ] `logs/02_test_suite_offline.txt` open in a tab, in case "how do you know?" comes early
 - [ ] `pytest -q` output on screen, real, not from memory
 - [ ] `run_demo.py` ready as a fallback if the browser misbehaves
 - [ ] Demo re-run end-to-end **twice** before presenting
@@ -145,6 +165,35 @@ Ending on the limitation makes everything before it more credible.
 | Claiming prompt-injection defence is complete | It is a mitigations story | Name the controls and the residual risk honestly |
 | Overstating accuracy from 20 cases | 20 cases invites percentage claims | Give counts, sample size, and the bias |
 | Admitting a low score to look modest | Feels safer | Report it accurately with the reason |
+| **Presenting the 0.958 "agreement" as two independent labellers** | It reads as a rigorous inter-annotator study | It was a self-reconciliation by the same agent that wrote the verifier. Say so; it costs nothing and is checkable |
+| **Quoting precision 1.000 as "the system never makes a mistake"** | 1.000 is the number examiners remember | It is 1.000 on 24 self-authored cases. The honest sentence: "on this labelled set, at this threshold" |
+| **Defending abstention as a limitation that only affects edge cases** | Sounds like hedging | "The measured abstention rate is 0.000. It does not work on a non-empty index. Here are the three logs." |
+| Claiming CI is green | It would sound rigorous | It has never run; there is no repository |
+| Claiming the UI was visually verified | 98 UI tests sound like coverage | They prove the render path executes, not that a layout is readable |
+
+### 4.5 The three questions Phase 6 made newly answerable
+
+These now have measured answers. Use them.
+
+**"How do you know 0.63 is the right threshold?"**
+Sweep 0.30 → 0.90 over a 24-case labelled set from our own 15-page report. 0.63 is the
+highest-F1 point with false-`Verified` = 0.000 (P 1.000, R 0.800, F1 0.889). The previous 0.62
+was inherited from Stage 2 unmeasured and carries a false-`Verified` rate of 0.125. Full sweep:
+`logs/05_evaluate.txt`.
+
+**"Did your own testing find real bugs?"**
+Yes — the unit suite found nothing, and the evaluation found two. The negation check compared one
+sentence against a whole 180-word chunk, so six correct claims returned `contradiction_detected`
+because the chunk contained "not an OCR engine" elsewhere. And it compared negation *cue words*
+rather than *polarity*, so "does not depend" and "no … required" read as opposites. Accuracy over
+the 24 cases went 0.292 → 0.625 → 0.667. Both are regression-tested now. Saying this costs nothing
+and demonstrates the evaluation was worth running.
+
+**"What is the system's worst failure?"**
+Abstention, measured: 0.000. Given three questions absent from the corpus, it answered all three
+with real citations to irrelevant passages (`logs/07`–`09`). The abstention path works on an empty
+index; the generator's relevance trigger does not. The fix is a relevance floor on the retrieved
+set, which we did not attempt. Naming this first is more defensible than being asked.
 
 ### 4.4 Demonstrable technical understanding
 
@@ -181,7 +230,14 @@ Every member should be able to explain, unaided:
 11. Evaluation ([10](10_EVALUATION_METRICS.md), real numbers with methods)
 12. Limitations and future work
 13. Individual contributions (from actual commit authorship, [13](13_TEAM_CONTRIBUTIONS.md))
-14. References — **fix Stage 2's [I-01](03_GAP_ANALYSIS.md#31-internal-inconsistencies-found-in-the-stage-2-report) numbering error**
+14. References — Stage 3 cites only what it read. Stage 2's suspected numbering error
+    ([I-01](03_GAP_ANALYSIS.md#31-internal-inconsistencies-found-in-the-stage-2-report)) was **checked
+    in Phase 7 and did not reproduce**: zero dangling and zero orphaned references in the Stage 2
+    text. Worth being able to explain, because it shows an audit finding being closed by measurement
+    rather than assumed.
+
+The draft is written: [16_STAGE_3_REPORT_DRAFT.md](16_STAGE_3_REPORT_DRAFT.md), following exactly this
+outline. It is **not submission-ready** — see its §15 for what is missing.
 
 ## 6. Anti-fabrication checklist before submission
 

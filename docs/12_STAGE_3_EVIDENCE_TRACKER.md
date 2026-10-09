@@ -1,6 +1,6 @@
 # 12 — Stage 3 Evidence Tracker
 
-**Status:** Phase 6 complete · Last updated 2026-10-08
+**Status:** Phase 6 complete, audited in Phase 7 · Last updated 2026-10-08
 **Related:** [Requirements §8](01_REQUIREMENTS.md#8-traceability-matrix-requirement-phase-evidence) · [Evaluation](10_EVALUATION_METRICS.md) · [Team Contributions](13_TEAM_CONTRIBUTIONS.md) · [Testing](09_TESTING_STRATEGY.md)
 
 ---
@@ -27,7 +27,7 @@ Anything else stays empty. An empty `Evidence` cell means the claim cannot go in
 
 | Claim class | Count | Verified today |
 |---|---|---|
-| Automated tests | 17 scenarios + 20 contracts | **371 passing**, 6 deselected, 0 skipped; 17 scenarios + 20 contracts covered, plus 98 UI and 46 hardening tests |
+| Automated tests | 17 scenarios + 20 contracts | **402 passing**, 6 deselected, 0 skipped; 17 scenarios + 20 contracts covered, plus 98 UI and 46 hardening tests |
 | Screenshots | ~10 states | **0** |
 | Evaluation metrics | 24 | **13 measured**, **4 explicitly not measured**, 1 negative finding (abstention, R-24), 1 calibration nuance (lexical paraphrase limit, D-26). §9 |
 | Commits attributable to a named student | 0 | **0** — *and the directory is not a git repository (B-05)* |
@@ -55,7 +55,7 @@ repository.** They are historical report claims and are recorded in
 | UI | `app.py` | Purv | **VERIFIED** | Headless server returns HTTP 200 with no traceback in the log; 12 render-helper tests assert emitted markup; CT-20 confirms it imports only `src.pipeline` and `src.models`; 13 contrast ratios measured | UI-1, UI-2, CT-20, NFR-10 |
 | Evaluation harness | `tools/evaluate.py`, `tools/build_cases.py` | Bhavya | **VERIFIED** | 24-case set built from the real 15-page report; every passage asserted verbatim against the extraction; no case carries an expected system label; threshold swept 0.30→0.90; chosen 0.63 with false-`Verified` = 0.000. Output in [tests/data/eval_results.json](../tests/data/eval_results.json) | NFR-11, NFR-12 |
 | Measurement harness | `tools/measure.py` | Bhavya | **VERIFIED** | 13 metrics measured on the real report (Recall@k, MRR, latency, RSS, determinism, abstention); full output in [tests/data/metrics.json](../tests/data/metrics.json) | FR-50, NFR-07→09 |
-| Tests | `tests/test_core.py`, `test_retrieval.py`, `test_verification.py`, `test_ui.py`, `test_hardening.py` | Bhavya / Purv | **VERIFIED** | 371 passed, 6 deselected, 0 skipped. All PDF fixtures generated in process; no binary blobs, no network, no absolute paths | - |
+| Tests | `tests/test_core.py`, `test_retrieval.py`, `test_verification.py`, `test_ui.py`, `test_hardening.py` | Bhavya / Purv | **VERIFIED** | 402 passed, 6 deselected, 0 skipped. All PDF fixtures generated in process; no binary blobs, no network, no absolute paths | - |
 | Test config | `pytest.ini` | Purv | **VERIFIED** | `semantic` marker registered; default `addopts = -m "not semantic"` | NFR-01 |
 | Dependencies | `requirements.txt` | Bhavya | **VERIFIED** | Installed into `.venv` on CPython 3.14.6; 110 packages, no manual intervention | NFR-05 |
 | CI config | `.github/workflows/tests.yml` | Bhavya | **IMPLEMENTED** | Workflow parses and pins the offline profile; a test asserts it exists and disables the hub. **It has never executed** — there is no repository (B-08) | NFR-05 |
@@ -69,7 +69,7 @@ repository.** They are historical report claims and are recorded in
 | Clean-venv install verified | succeeded, 110 packages | **VERIFIED** | `.venv\Scripts\python.exe -m pip install -r requirements.txt` |
 | `chromadb` install status | **1.5.9, working** | **VERIFIED** | import + `add` + `query` + reopen-same-path-and-count → `count = 2`. Retires **R-01** |
 | CPU model | **Intel64 Family 6 Model 154, 8 logical** | **MEASURED** | `tools/measure.py` (via `wmic`) |
-| RAM | present | **MEASURED** | peak RSS recorded during the measurement run: 191.6 MB |
+| RAM | present | **MEASURED** | peak RSS recorded during the measurement run: 191.3 MB |
 | OS build | Windows 11, build 26300 | **MEASURED** | `platform.platform()` in `tests/data/metrics.json` |
 | GPU | none by design (CPU-only) | VERIFIED (by design) | NFR-02 target; no `torch.cuda` reference in `src/` |
 | CI green on fresh clone | — | **BLOCKED** | workflow exists and parses, but **has never run** — there is no repository (B-05 → B-08) |
@@ -90,15 +90,64 @@ repository.** They are historical report claims and are recorded in
 | 8 | 2026-10-08 | Offline, hub disabled | `pytest -q` with `HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1` | **227 passed, 6 deselected in 10.99s** | same |
 | 9 | 2026-10-08 | Offline | `.venv\Scripts\pytest.exe -q` | **325 passed, 6 deselected in 24.04s** | `325 passed, 6 deselected, 1 warning in 24.04s` |
 | 10 | 2026-10-08 | Offline, hub disabled | `pytest -q` with `HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1` | **325 passed, 6 deselected in 20.85s** | same |
-| 11 | **2026-10-08** | **Offline** | **`.venv\Scripts\pytest.exe -q`** | **371 passed, 6 deselected in 64.30s** | `371 passed, 6 deselected, 1 warning in 64.30s` |
-| 12 | **2026-10-08** | **Offline, hub disabled** | **`pytest -q` with all three `*_OFFLINE=1`** | **371 passed, 6 deselected in 57.08s** | same |
-| 13 | **2026-10-08** | **Offline, fresh venv** | **second venv from `requirements.txt`, then run 11's command** | **371 passed, 6 deselected in 79.37s** | same |
+| 11 | 2026-10-08 | Offline | `.venv\Scripts\pytest.exe -q` | **371 passed, 6 deselected in 64.30s** | `371 passed, 6 deselected, 1 warning in 64.30s` |
+| 12 | 2026-10-08 | Offline, hub disabled | `pytest -q` with all three `*_OFFLINE=1` | **371 passed, 6 deselected in 57.08s** | same |
+| 13 | 2026-10-08 | Offline, fresh venv | second venv from `requirements.txt`, then run 11's command | **371 passed, 6 deselected in 79.37s** | same |
+| **14** | **2026-10-08** | **Offline, after 4 verifier fixes** | **`.venv\Scripts\pytest.exe -q`** | **402 passed, 6 deselected in 53.50s** | **`402 passed, 6 deselected, 1 warning in 53.50s`** |
 
-Zero failures across all thirteen runs. Zero skips, zero xfails.
+Runs 11–13 predate the four verifier fixes found in Phase 7 (§6.1c). They are kept because the number
+they report was the number the calibration was justified against, and rewriting history would be the
+thing this document exists to prevent. Run 14 is current.
+
+Zero failures across all fourteen runs. Zero skips, zero xfails.
 
 The `6 deselected` are the `semantic`-marked tests. **`pytest -q -m semantic` has never been run** —
 MiniLM and FLAN-T5 weights are absent from this machine. They are written and collectable; their
 result is **unmeasured**, and no row in this document may claim otherwise.
+
+### 6.1c Five verifier defects, and the three that testing-the-tests found
+
+| # | Defect | Found by | Movement |
+|---|---|---|---|
+| 1 | Negation compared one sentence against a whole 180-word chunk | 24-case evaluation | accuracy 0.292 ? 0.625 |
+| 2 | Negation compared cue *words* rather than *polarity* | 24-case evaluation | accuracy 0.625 ? 0.667 |
+| 3 | `_antonym_conflict` looped over `claim_tokens & chunk_tokens` | direct unit tests, Phase 7 | **none** |
+| 4 | `_claim_is_negated` intersected a *filtered* token set, so `not`/`no`/`nor`/`without` were invisible | direct unit tests, Phase 7 | **none** |
+| 5 | The antonym list paired inflections individually, so cross-forms never met | direct unit tests, Phase 7 | **none** |
+
+Defects 3?5 are the interesting ones. All were live bugs in the shipped verifier and all pointed the
+same way: they made the contradiction check **fail to fire**, which is the safe direction for false
+positives but means the check did less than its docstring claimed.
+
+**Defect 3**: a contradiction means the claim uses one member of an antonym pair and the passage the
+other, so the token under test is **never in the intersection the loop was searching**. The function
+fired only when the passage contained *both* members. **The antonym branch was effectively dead
+code.**
+
+**Defect 4** was the same mistake the module's own docstring warns against at length ? routing negation
+through `content_tokens`, which drops stopwords, four of the ten cues being stopwords including `not`.
+
+**Defect 5** was a data-shape problem: `("increase","decrease")`, `("increased","decreased")` and
+`("increases","decreases")` were three separate pairs, so each form met only its own inflection.
+Fixing it by pairing every concept with every other was tried and **rejected** ? through polysemy it
+makes `increased` and `cost` antonyms, so "The cost increased" reports as self-contradictory. The
+shipped form groups inflections under 14 concepts with 7 explicitly named oppositions, and the check
+declines when the passage also uses the claim's own direction, so a mixed result ("accuracy increased
+while latency decreased") is not read as a denial of the claim.
+
+**The measured consequence of fixing all three is zero.** Accuracy stayed at 0.667; precision 1.000,
+recall 0.800, F1 0.889, false-`Verified` 0.000 unchanged; the sweep returns the same chosen threshold
+of 0.63 ([logs/05_evaluate.txt](../logs/05_evaluate.txt)). On this fixture every contradiction the
+evaluation credits to the verifier is caught by the numeric and polarity branches.
+
+That is the honest reading, and it is a better result than a moved number: the calibration was not
+built on a broken branch. It also means **the antonym branch is unexercised by measurement** ? the
+same class of gap as the abstention one, and tracked as **R-25**.
+
+31 direct tests now cover the branch. Four treat the concept list as data rather than prose ? every
+form a matchable token, no form in two concepts, every concept participating in an opposition, no
+dangling reference ? and 24 parametrised cases cover detection across inflections, polysemy
+non-detection, mixed results, the claim's own direction, and the negation guard.
 
 ### 6.1a Hardening suite (Phase 6)
 
@@ -223,7 +272,7 @@ Manual checks must be labelled **manual**, never counted as automated tests.
 | Keyboard-only walkthrough | manual | **PLANNED** | R-23, Phase 7. Focus markers and reduced-motion are asserted in code; the walkthrough is a person, not a test |
 | 1280 px / 768 px layout | manual | **PLANNED** | R-23, Phase 7 |
 | Physical offline run, network genuinely off | **automated** | **VERIFIED** | Phase 6 replaced `socket.connect` with a raiser and completed a full cycle — stronger than unplugging the cable, and repeatable |
-| Cold-start app responsiveness | manual | PLANNED | _empty_ |
+| Cold-start app responsiveness | **automated** | **VERIFIED** | [logs/06_ui_headless.txt](../logs/06_ui_headless.txt): root `status=200 len=6463`, `_stcore/health` -> `ok`, `traceback present: False` |
 | Fresh-machine install by a teammate | **partly automated** | **PARTIAL** | A fresh venv from `requirements.txt` alone passes 371 tests (§6.1 run 13). A teammate on their own machine is still unverified — that needs B-05 |
 
 ## 8. Screenshot evidence
@@ -232,19 +281,25 @@ Every screenshot needs a timestamp and a label. **Schematic diagrams must be lab
 
 | # | Surface / state | Type | Status | File |
 |---|---|---|---|---|
-| S1 | Dashboard with a real indexed collection | capture | PLANNED | _empty_ |
-| S2 | Document library, multiple documents | capture | PLANNED | _empty_ |
-| S3 | Research workspace with an answer + markers | capture | PLANNED | _empty_ |
-| S4 | Verification summary, all three labels present | capture | PLANNED | _empty_ |
-| S5 | Evidence inspector, open, with passage | capture | PLANNED | _empty_ |
-| S6 | Abstention / insufficient evidence | capture | PLANNED | _empty_ |
-| S7 | Unsupported claim + explanation | capture | PLANNED | _empty_ |
-| S8 | Error state (encrypted / scanned PDF) | capture | PLANNED | _empty_ |
-| S9 | Degraded profile badge | capture | PLANNED | _empty_ |
+| S1 | Dashboard with a real indexed collection | capture | **NOT CAPTURED** | Needs a person at a screen (7.2). Not fabricated — see [16 §15](16_STAGE_3_REPORT_DRAFT.md#15-what-this-draft-is-not-yet) |
+| S2 | Document library, multiple documents | capture | **NOT CAPTURED** | Needs a person at a screen (7.2). Not fabricated |
+| S3 | Research workspace with an answer + markers | capture | **NOT CAPTURED** | Needs a person at a screen (7.2). Not fabricated |
+| S4 | Verification summary, all three labels present | capture | **NOT CAPTURED** | Needs a person at a screen (7.2). Not fabricated |
+| S5 | Evidence inspector, open, with passage | capture | **NOT CAPTURED** | Needs a person at a screen (7.2). Not fabricated |
+| S6 | Abstention / insufficient evidence | capture | **NOT CAPTURED** | Needs a person at a screen (7.2). Not fabricated |
+| S7 | Unsupported claim + explanation | capture | **NOT CAPTURED** | Needs a person at a screen (7.2). Not fabricated |
+| S8 | Error state (encrypted / scanned PDF) | capture | **NOT CAPTURED** | Needs a person at a screen (7.2). Not fabricated |
+| S9 | Degraded profile badge | capture | **NOT CAPTURED** | Needs a person at a screen (7.2). Not fabricated |
 | S10 | Architecture diagram | **schematic** | **IMPLEMENTED (not rendered)** | Mermaid source in [04](04_SYSTEM_ARCHITECTURE.md); the rendered image is still outstanding |
 
 S10 is a diagram and **must be labelled "schematic"**. Stage 2 correctly disclosed that its Figure 4
 was a preview rather than a screenshot; keeping that discipline is a project strength.
+
+**Nine of the ten are NOT CAPTURED, and that is now stated rather than left as `PLANNED`.** A
+`PLANNED` row invites an optimistic reading; `NOT CAPTURED` is a fact. No screenshot will be
+fabricated or approximated with a generated mockup, so the report draft at
+[16_STAGE_3_REPORT_DRAFT.md](16_STAGE_3_REPORT_DRAFT.md) carries **no images at all** and says so
+in §9 and §15.
 
 ## 9. Metric evidence
 
@@ -272,9 +327,9 @@ Definitions in [10_EVALUATION_METRICS.md](10_EVALUATION_METRICS.md). **Do not es
 | Chosen thresholds | `verified` 0.63, `review` 0.315 | swept 0.30→0.90; highest F1 with false-`Verified` = 0. See §7.4 of the tracker | **MEASURED** |
 | Determinism rate (offline) | **1.000** (5/5 runs) | answer + verifications byte-identical; timings excluded, see §6.1b | **MEASURED** |
 | Determinism rate (semantic) | _not measured_ | — | PLANNED — needs MiniLM weights |
-| Indexing latency | **2.67 s / 100 pages** | 3 runs, fresh pipeline each; median 0.400 s for 15 pages | **MEASURED** |
-| Query latency p50/p95 | **12.86 / 16.00 ms** (max 19.31 ms, n=27) | after warm-up, offline profile | **MEASURED** |
-| Peak RAM | **191.6 MB** (baseline 190.1 MB) | sampled after each stage; **+1.5 MB** for the whole corpus | **MEASURED** |
+| Indexing latency | **3.236 s / 100 pages** | 3 runs, fresh pipeline each; median 0.486 s for 15 pages | **MEASURED** |
+| Query latency p50/p95 | **12.40 / 15.55 ms** (max 16.35 ms, n=27) | after warm-up, offline profile | **MEASURED** |
+| Peak RAM | **191.3 MB** (baseline 190.0 MB) | sampled after each stage; **+1.3 MB** for the whole corpus | **MEASURED** |
 | Model load time | _not measured_ | — | PLANNED — no model has ever been loaded here, so there is nothing to time |
 | Page count (fixture) | **15** | `load_document` on the real Stage 2 report | **MEASURED** |
 | Chunk count (fixture) | **46** | `chunk_pages`, `ChunkConfig(180, 30)` | **MEASURED** |

@@ -1,20 +1,20 @@
 # 15 — Progress Tracker
 
-**Status:** Phase 6 complete · Last updated 2026-10-08
+**Status:** Phase 7 in progress - report drafted, awaiting manual items - Last updated 2026-10-08
 **Related:** [Roadmap](06_IMPLEMENTATION_ROADMAP.md) · [Evidence Tracker](12_STAGE_3_EVIDENCE_TRACKER.md) · [Risk Register](14_RISK_REGISTER.md) · [Gap Analysis](03_GAP_ANALYSIS.md)
 
 ---
 
 ## 1. Current status
 
-> ### `AWAITING PHASE 7 APPROVAL`
+> ### `PHASE 7 ACTIVE — GATE G7 NOT YET PASSED`
 
 | | |
 |---|---|
-| **Phase complete** | Phases 0–6: research, documentation, foundation, retrieval, verification, UI, **testing + hardening** |
-| **Phase blocked on** | Human approval to begin Phase 7 (Stage 3 readiness) |
-| **Authorization phrase** | `APPROVE PHASE 7` |
-| **Tests written** | **371** across `test_core.py` (64), `test_retrieval.py` (80), `test_verification.py` (83), `test_ui.py` (98), `test_hardening.py` (46) |
+| **Phase complete** | Phases 0–6: research, documentation, foundation, retrieval, verification, UI, testing + hardening |
+| **Phase in progress** | **7** (Stage 3 readiness) — report **drafted** at [16_STAGE_3_REPORT_DRAFT.md](16_STAGE_3_REPORT_DRAFT.md), logs captured in [logs/](../logs/README.md) |
+| **G7 blocked on** | **Screenshots S1–S9** (no human at a screen), **B-05** (no repository ⇒ no contribution table, no CI), semantic-profile figures (no weights) |
+| **Tests written** | **402** across `test_core.py` (64), `test_retrieval.py` (80), `test_verification.py` (114), `test_ui.py` (98), `test_hardening.py` (46) |
 | **Commits made** | 0 — **this directory is not a git repository** (B-05) |
 | **CI** | Workflow written at `.github/workflows/tests.yml`. **It has never run** — there is no repository to run it in. |
 | **Model weights downloaded** | 0 — semantic and abstractive paths written, **unmeasured** |
@@ -31,8 +31,8 @@
 | 3 | Retrieval | **DONE** | Purv | G3 **passed** | `pytest -q` → 144 passed; see §7 |
 | 4 | Generation + verification | **DONE** | Rishabh / Purv | G4 **passed** | `pytest -q` → 227 passed; see §7 |
 | 5 | Premium UI | **DONE** | Purv | G5 **passed**, 3 manual items pending | `pytest -q` → 325 passed; headless HTTP 200; see §7 |
-| 6 | Testing + hardening | **DONE** | Bhavya | G6 **passed**, CI cannot run | `pytest -q` → 371 passed; see §7 |
-| 7 | Stage 3 readiness | NOT STARTED | All | G7 | — |
+| 6 | Testing + hardening | **DONE** | Bhavya | G6 **passed**, CI cannot run | `pytest -q` → 402 passed; see §7 |
+| 7 | Stage 3 readiness | **IN PROGRESS** | All | G7 **not passed** — 4 of 8 scope items done, 3 blocked | [16_STAGE_3_REPORT_DRAFT.md](16_STAGE_3_REPORT_DRAFT.md), [logs/](../logs/README.md) |
 
 ## 3. Completed outputs
 
@@ -73,7 +73,7 @@
 | 33 | Retrieval tests | [tests/test_retrieval.py](../tests/test_retrieval.py) | 80 tests: EC-05, EC-08, EC-14/15, CT-08, FR-16→FR-28, degradation, Chroma persistence |
 | 34 | Answer generation | [src/generator.py](../src/generator.py) | Extractive default (offline, injection-proof), optional FLAN-T5 with visible degradation, marker attribution from retrieved data only |
 | 35 | Citation verification | [src/verifier.py](../src/verifier.py) | Marker grammar, resolution, containment overlap, `0.7·sim + 0.3·overlap`, numeric + negation + antonym checks, config-driven labels |
-| 36 | Verification tests | [tests/test_verification.py](../tests/test_verification.py) | 83 tests: EC-09→EC-13, EC-16, EC-17, CT-09→CT-19, SEC-05 end-to-end |
+| 36 | Verification tests | [tests/test_verification.py](../tests/test_verification.py) | 114 tests: EC-09→EC-13, EC-16, EC-17, CT-09→CT-19, SEC-05 end-to-end |
 | 37 | Streamlit UI | [app.py](../app.py) | Dashboard, Library, Workspace; all activity states; namespaced CSS only; no duplicated pipeline logic |
 | 38 | UI tests | [tests/test_ui.py](../tests/test_ui.py) + [tests/app_under_test.py](../tests/app_under_test.py) | 98 tests; imports `app.py` directly rather than reimplementing its render path |
 | 39 | CLI demo | [run_demo.py](../run_demo.py) | FR-48/49: exit 0/1/2, `--json`, identical output across runs, imports only the public API |
@@ -82,6 +82,9 @@
 | 42 | Measurement harness | [tools/measure.py](../tools/measure.py) | Latency, Recall@k, MRR, RSS, determinism, abstention → [metrics.json](../tests/data/metrics.json) |
 | 43 | Hardening tests | [tests/test_hardening.py](../tests/test_hardening.py) | 46 tests: evaluation integrity, calibration re-run, security sweep, metrics re-run, CLI, CI config |
 | 44 | CI workflow | [.github/workflows/tests.yml](../.github/workflows/tests.yml) | Offline matrix on 3.14. **Written, never executed** (B-08) |
+| 45 | **Stage 3 report draft** | [docs/16_STAGE_3_REPORT_DRAFT.md](16_STAGE_3_REPORT_DRAFT.md) | 15 sections, drafted from the evidence tracker only. **Not submission-ready** — §15 lists what is missing |
+| 46 | **Reproducible logs** | [logs/README.md](../logs/README.md) | 9 captured command outputs: environment, test run, demo, metrics, sweep, headless UI, 3 abstention cases |
+| 47 | **Stage 3 deviations log** | [docs/01 §3.1](01_REQUIREMENTS.md#31-stage-3-versus-stage-2-deviations-log) | D-11 → D-19, each forced by a measurement |
 
 ## 4. Phase 0 findings — the short version
 
@@ -162,13 +165,14 @@ reach a green result.
 | 2026-10-08 | 4 | `pytest -q` | Offline | 227 passed, 6 deselected in 12.22s |
 | 2026-10-08 | 4 | as above, hub disabled | Offline | 227 passed, 6 deselected in 10.99s |
 | 2026-10-08 | 5 | `app.py` written ? three surfaces, all activity states, namespaced CSS design system; `reconfigure()` and `last_report` added to the pipeline; `tests/test_ui.py` (98 tests) + `tests/app_under_test.py` shim; **325 passed, 6 deselected**; gate G5 passed with 3 manual items pending; 13 contrast ratios measured |
-| 2026-10-08 | 6 | `run_demo.py` (FR-48/49); `tools/build_cases.py` + `tools/evaluate.py` ? **24-case hand-labelled set**, every passage verbatim-checked; `tools/measure.py` ? 13 metrics on the real 15-page report; `tests/test_hardening.py` (46 tests); `.github/workflows/tests.yml`; **371 passed, 6 deselected**; gate G6 passed except CI (B-05). `verified_threshold` 0.62 ? **0.63**; false-`Verified` 0.125 ? **0.000**. Two verifier defects found by the evaluation and fixed |
-| 2026-10-08 | 6 | `run_demo.py` (FR-48/49); `tools/build_cases.py` + `tools/evaluate.py` -> **24-case hand-labelled set**, every passage verbatim-checked; `tools/measure.py` -> 13 metrics on the real 15-page report; `tests/test_hardening.py` (46 tests); `.github/workflows/tests.yml`; **371 passed, 6 deselected**; gate G6 passed except CI (B-05). `verified_threshold` 0.62 -> **0.63**; false-`Verified` 0.125 -> **0.000**. Two verifier defects found by the evaluation and fixed |
-| 2026-10-08 | 6 | `run_demo.py` (FR-48/49); `tools/build_cases.py` + `tools/evaluate.py` -> **24-case hand-labelled set**, every passage verbatim-checked against the extraction; `tools/measure.py` -> 13 metrics on the real 15-page report; `tests/test_hardening.py` (46 tests); `.github/workflows/tests.yml`; **371 passed, 6 deselected**; gate G6 passed except CI, which cannot run (B-05). `verified_threshold` 0.62 -> **0.63**; false-`Verified` 0.125 -> **0.000**. Two verifier defects found by the evaluation and fixed |
+| 2026-10-08 | 6 | `run_demo.py` (FR-48/49); `tools/build_cases.py` + `tools/evaluate.py` ? **24-case hand-labelled set**, every passage verbatim-checked; `tools/measure.py` ? 13 metrics on the real 15-page report; `tests/test_hardening.py` (46 tests); `.github/workflows/tests.yml`; **402 passed, 6 deselected**; gate G6 passed except CI (B-05). `verified_threshold` 0.62 ? **0.63**; false-`Verified` 0.125 ? **0.000**. Two verifier defects found by the evaluation and fixed |
+| 2026-10-08 | 6 | `run_demo.py` (FR-48/49); `tools/build_cases.py` + `tools/evaluate.py` -> **24-case hand-labelled set**, every passage verbatim-checked; `tools/measure.py` -> 13 metrics on the real 15-page report; `tests/test_hardening.py` (46 tests); `.github/workflows/tests.yml`; **402 passed, 6 deselected**; gate G6 passed except CI (B-05). `verified_threshold` 0.62 -> **0.63**; false-`Verified` 0.125 -> **0.000**. Two verifier defects found by the evaluation and fixed |
+| 2026-10-08 | 6 | `run_demo.py` (FR-48/49); `tools/build_cases.py` + `tools/evaluate.py` -> **24-case hand-labelled set**, every passage verbatim-checked against the extraction; `tools/measure.py` -> 13 metrics on the real 15-page report; `tests/test_hardening.py` (46 tests); `.github/workflows/tests.yml`; **402 passed, 6 deselected**; gate G6 passed except CI, which cannot run (B-05). `verified_threshold` 0.62 -> **0.63**; false-`Verified` 0.125 -> **0.000**. Two verifier defects found by the evaluation and fixed |
 | 2026-10-08 | 5 | as above, hub disabled | Offline | 325 passed, 6 deselected in 20.85s |
 | **2026-10-08** | **6** | **`pytest -q`** | **Offline** | **371 passed, 6 deselected in 64.30s** |
 | **2026-10-08** | **6** | **`pytest -q -m "not semantic"`, all three `*_OFFLINE=1`** | **Offline** | **371 passed, 6 deselected in 57.08s** |
 | **2026-10-08** | **6** | **fresh venv from `requirements.txt`, then the same command** | **Offline** | **371 passed, 6 deselected in 79.37s** |
+| **2026-10-08** | **7** | **`pytest -q`, after 4 verifier fixes (§7.4)** | **Offline** | **402 passed, 6 deselected in 53.50s** |
 | — | all | `pytest -q -m semantic` | Semantic | **never run. No MiniLM or FLAN-T5 weights on this machine. Unmeasured, not passed.** |
 
 The **6 deselected** tests carry the `semantic` marker
@@ -183,7 +187,7 @@ rather than filtered — a suppressed warning hides the next real one too.
 
 > Stage 2 reported "10/10 passing tests" against a prior local prototype not present in this
 > workspace ([ADR-0013](05_TECH_STACK_AND_ADRS.md#adr-0013--treat-stage-2-prototype-claims-as-unverified)).
-> That is a historical report claim. The current number is **371**, and it is 371 because these are
+> That is a historical report claim. The current number is **402**, and it is 402 because these are
 > this project's own tests.
 
 ---
@@ -392,22 +396,55 @@ to 0.63 puts that case, scoring exactly 0.630, above the line.
 justifies the operating point; it does not prove the threshold is correct in general. R-10 stands, and
 the report must say "justified on 24 cases" rather than "validated".
 
-### Two real defects the evaluation found
+### Five real defects, three of them found by testing the tests
 
-Neither was visible to the test suite. Both were found by running the system against real academic
-text, which is the entire argument for doing this at all.
+The first two were invisible to the unit suite and surfaced only by running the system against real
+academic text. The next three were found in Phase 7 by writing direct unit tests for helper functions
+that had only ever been reached indirectly ? the evaluation could not find them, and it should have,
+which is worth stating plainly.
 
 1. **The negation check compared one sentence against a whole paragraph.** Six plainly-supported
    claims returned `contradiction_detected` because the 180-word chunk contained "not an OCR engine"
    somewhere while the claim itself had no negation. Now restricted to the passage's best-matching
    sentence.
-2. **The negation check compared cue words instead of polarity.** "does not depend" and "no …
+2. **The negation check compared cue words instead of polarity.** "does not depend" and "no ?
    required" are the same polarity; treating them as a mismatch flagged a correct paraphrase. Now
    compares presence-of-negation, not which word was used.
+3. **`_antonym_conflict` searched the wrong token set** (`verifier.py`). It looped over
+   `claim_tokens & chunk_tokens`, but a contradiction means the claim uses one member of a pair and
+   the passage the other ? so the token under test is never in the intersection. The function fired
+   only when the passage happened to contain *both* members, which is the opposite of the
+   disagreement it was looking for. **The antonym branch was effectively dead.** Now iterates the
+   claim's own tokens.
+4. **`_claim_is_negated` could not see the cues it needed.** It intersected a token set built by
+   `content_tokens`, which drops stopwords ? and `not`, `no`, `nor` and `without` are all stopwords.
+   Four of the ten negation cues were therefore invisible, including the commonest one in English.
+   The module's own docstring warns at length against routing negation through `content_tokens`, and
+   this path did exactly that. Now reads the raw claim text.
+5. **The antonym list paired inflections individually.** `("increase","decrease")`,
+   `("increased","decreased")` and `("increases","decreases")` were three separate pairs, so a claim
+   saying "increased" and a passage saying "decreased" never met. Now grouped by concept, with seven
+   named oppositions ? declaring every pair would have been worse, because through polysemy it makes
+   `increased` and `cost` antonyms and "The cost increased" self-contradictory. The check also now
+   declines when the passage uses the claim's own direction, so a mixed result is not read as a denial.
 
-Accuracy over the 24 cases: **0.292 → 0.625 → 0.667**. Both fixes live in
-[src/verifier.py](../src/verifier.py) with the measurement that motivated them.
+Accuracy over the 24 cases: **0.292 ? 0.625 ? 0.667** for the first two, and **unchanged at 0.667**
+after the next three. That is the finding worth stating: all five defects were real, and fixing them
+moved no measured number, because on this fixture every contradiction the evaluation credits to the
+verifier is caught by the numeric and polarity branches. The antonym branch is now correct code that
+this labelled set does not exercise.
 
+**The threshold did not move.** Re-running the sweep after the fixes returns the same chosen point:
+`verified_threshold = 0.63`, F1 0.889, precision 1.000, recall 0.800, false-`Verified` 0.000
+([logs/05_evaluate.txt](../logs/05_evaluate.txt)). Calibration was not invalidated, so no
+re-calibration was performed and none is claimed.
+
+All five fixes live in [src/verifier.py](../src/verifier.py). Defects 3?5 are pinned by 31 direct
+tests, four of which treat the concept list as data ? every form a matchable token, no form in two
+concepts, every concept in an opposition, no dangling reference ? plus 24 parametrised cases covering
+detection across inflections, polysemy, mixed results and the negation guard. One test,
+`test_the_guard_would_be_dead_if_it_read_filtered_tokens`, asserts the exact failure mode as an
+executable claim rather than leaving it in a comment.
 ---
 
 ## 8. Measurements taken
@@ -426,9 +463,9 @@ CPython 3.14.6, no GPU. Full output: [tests/data/metrics.json](../tests/data/met
 | **MRR** | **0.778** | mean reciprocal rank of the relevant page |
 | Marker coverage (extractive) | **1.000** | every claim carried a resolvable marker |
 | Citation resolution rate | **1.000** | no `unresolvable_reference` |
-| Indexing latency | **2.67 s per 100 pages** | 3 runs, fresh pipeline each; median 0.400 s for 15 pages |
-| Query latency p50 / p95 | **12.86 / 16.00 ms** | 27 queries after warm-up, offline profile |
-| Peak RSS | **191.6 MB** (baseline 190.1 MB) | sampled after each stage; **+1.5 MB** for the whole corpus |
+| Indexing latency | **3.236 s per 100 pages** | 3 runs, fresh pipeline each; median 0.486 s for 15 pages |
+| Query latency p50 / p95 | **12.40 / 15.55 ms** | 27 queries after warm-up, offline profile |
+| Peak RSS | **191.3 MB** (baseline 190.0 MB) | sampled after each stage; **+1.3 MB** for the whole corpus |
 | Determinism, offline | **1.000** (5/5 runs) | answer + verifications byte-identical; timings excluded, see §8.2 |
 | Abstention rate, 3 unanswerable questions | **0.000** | see §8.3 — this is the bad number |
 | Fabrications on abstention | **0** | invariant held |
@@ -513,27 +550,37 @@ beside the real ones would flatter the system.
 
 ## 9. Next action
 
-> **Awaiting `APPROVE PHASE 7`.**
+> **Phase 7 is under way.** Items 7.1, 7.3, 7.5, 7.7 and 7.8 are done. The rest need a human.
 
-Everything measured is measured; everything unmeasured is labelled. Phase 7 assembles the submission.
-On approval:
+### Done in Phase 7 so far
 
-1. **Resolve B-05 first.** `git init`, a remote, and a decision on who authors which history. Nothing in Stage 3's contribution table can be written until this is done, and CI cannot run until it is.
-2. Capture the ten screenshots, each labelled *capture* or *schematic*. S1–S9 are captures of real states; S10 is the architecture diagram and **must** be labelled a diagram.
-3. Walk the three outstanding manual UI checks: greyscale (R-23), keyboard, 1280/768 px.
-4. Run CI on the fresh clone and paste the real result.
-5. Draft the report **from** [12_STAGE_3_EVIDENCE_TRACKER.md](12_STAGE_3_EVIDENCE_TRACKER.md), never from memory. Every number must have a row.
-6. Correct Stage 2's reference mis-numbering (I-01) rather than inheriting it.
-7. Rehearse [11_DEMO_AND_VIVA_PREPARATION.md](11_DEMO_AND_VIVA_PREPARATION.md). Each member must be able to explain the calibration trade-off and the abstention limitation unaided — both are more likely to be asked about than the happy path.
+| Item | Result |
+|---|---|
+| 7.1 Evidence tracker complete | **done.** Every row carries a real artifact or an explicit "not measured". Remaining gaps are screenshots and CI, both recorded as gaps |
+| 7.3 Reproducible logs | **done.** 9 captured outputs in [logs/](../logs/README.md), each with the command that regenerates it |
+| 7.5 Report drafted from the tracker | **done, as a draft.** [16_STAGE_3_REPORT_DRAFT.md](16_STAGE_3_REPORT_DRAFT.md), 15 sections, no number that lacks a log |
+| 7.6 Viva script rehearsed | **done, on paper.** Beat 4 rewritten after R-24 was measured ? it promised an abstention that does not happen. New ?4.5 with the three questions Phase 6 made newly answerable |
+| 7.7 I-01 citation numbering | **closed by measurement.** The Stage 0 suspicion did not reproduce: `Magesh`, `legal research`, `hallucination-free` occur 0 times in the Stage 2 text, and a citation audit found 0 dangling and 0 orphaned references. R-04 closed |
+| 7.8 Deviations log | **done.** D-11 ? D-19 in [01 ?3.1](01_REQUIREMENTS.md#31-stage-3-versus-stage-2-deviations-log) |
 
-Carry these forward, because they are what the report must not hide:
+### Still open, and what each needs
 
-- **B-05 — still no git repository.** Nothing is committed. CI is written but has never run.
-- **R-24 — the offline profile does not abstain on insufficient *retrieved* evidence.** Measured, disclosed, unfixed.
-- **R-23 — the UI has not been seen.** 98 automated tests, three manual checks outstanding.
-- **The calibration rests on 24 self-authored cases.** It justifies `0.63`; it does not prove it.
-- **The 6 `semantic` tests have never run.** If the team can reach Hugging Face, run them once and record the result — pass or fail.
-- **B-07 — the fixture PDF lives outside the repository.** `tools/evaluate.py` and `tools/measure.py` skip without it, so the calibration is not reproducible on a fresh clone until someone decides whether the report may be committed.
+| # | Item | Needs | Who |
+|---|---|---|---|
+| 7.2 | **Screenshots S1?S9** | someone at a screen running `streamlit run app.py`. Nine captures, each labelled *captured* with a timestamp. None will be fabricated, so the report currently has no screenshots and says so | Human |
+| 7.4 | **Contribution table** | **B-05**: `git init`, a remote, and a decision on authorship. `git log --author=` currently has no output, so ?13 of the report is empty | Human |
+| 7.6b | R-23 manual UI checks | greyscale, keyboard-only, 1280/768 px. Three pairs of eyes | Human |
+| ? | CI run | follows from B-05 (B-08) | Human |
+| ? | Semantic-profile figures | MiniLM + FLAN-T5 weights, and a decision about whether to download them at this stage | Human |
+
+### Carry these forward, because they are what the report must not hide
+
+- **R-24 ? abstention rate 0.000.** Measured, disclosed in the report abstract and limitations, and captured in three logs. The demo script was rewritten because it promised a behaviour the system does not have.
+- **R-23 ? the UI has not been seen.** 98 automated tests prove the render path executes. That is not the same as a readable layout.
+- **The calibration rests on 24 self-authored, self-labelled cases.** It justifies 0.63; it does not prove it. The recorded 0.958 "agreement" is a self-reconciliation, not independent labellers, and is described that way everywhere it appears.
+- **The 6 `semantic` tests have never run.** If the team can reach Hugging Face, run them once and record the result ? pass or fail.
+- **B-07 ? the fixture PDF is outside the repository.** `tools/evaluate.py` and `tools/measure.py` skip without it, so the calibration is not reproducible on a fresh clone until someone decides whether the report may be committed.
+- **B-05 ? still no git repository.** Nothing is committed, so nothing in this report can cite a commit hash, and ?13 stays empty.
 
 ## 10. Session handoff notes
 
@@ -545,7 +592,7 @@ For the next agent session, in order:
 4. Read [06 §8](06_IMPLEMENTATION_ROADMAP.md#8-phase-7--stage-3-readiness) for scope and
    [12_STAGE_3_EVIDENCE_TRACKER.md](12_STAGE_3_EVIDENCE_TRACKER.md) — the report is drafted *from*
    that document, never from memory.
-5. Run tests with `.venv\Scripts\pytest.exe -q`. The pinned environment is where the 371 passing
+5. Run tests with `.venv\Scripts\pytest.exe -q`. The pinned environment is where the 402 passing
    tests were observed.
 6. `tools/evaluate.py` and `tools/measure.py` need the Stage 2 report at
    `~/Downloads/.pdf/FAI_PE_Microproject_Stage_2_Report_Revised.pdf`. Without it they skip, and
@@ -578,5 +625,7 @@ The equivalents that matter now live in the project:
 | 2026-10-08 | 2 | ADR-0001 accepted (Python 3.14.6); `.venv` + pinned `requirements.txt`; `chromadb` verified; `src/models.py`, `src/pdf_ingestion.py`, `src/chunking.py` written; `tests/test_core.py` with 56 tests, all passing; gate G2 passed |
 | 2026-10-08 | 3 | `src/embeddings.py`, `src/vector_store.py`, `src/pipeline.py` written; `RetrievalResult`/`IndexStats`/`PipelineConfig` added to `src/models.py`; fixtures extracted to `tests/conftest.py`; `tests/test_retrieval.py` added (80 tests); `pytest.ini` registers the `semantic` marker; **144 passed, 4 deselected**; gate G3 passed |
 | 2026-10-08 | 5 | `app.py` written - three surfaces, all activity states, namespaced CSS design system; `reconfigure()` and `last_report` added to the pipeline; `tests/test_ui.py` (98 tests) + `tests/app_under_test.py` shim; **325 passed, 6 deselected**; gate G5 passed with 3 manual items pending; 13 contrast ratios measured |
-| 2026-10-08 | 6 | `run_demo.py` (FR-48/49); `tools/build_cases.py` + `tools/evaluate.py` -> **24-case hand-labelled set**, every passage verbatim-checked; `tools/measure.py` -> 13 metrics on the real 15-page report; `tests/test_hardening.py` (46 tests); `.github/workflows/tests.yml`; **371 passed, 6 deselected**; gate G6 passed except CI (B-05). `verified_threshold` 0.62 -> **0.63**; false-`Verified` 0.125 -> **0.000**. Two verifier defects found by the evaluation and fixed |
+| 2026-10-08 | 6 | `run_demo.py` (FR-48/49); `tools/build_cases.py` + `tools/evaluate.py` -> **24-case hand-labelled set**, every passage verbatim-checked; `tools/measure.py` -> 13 metrics on the real 15-page report; `tests/test_hardening.py` (46 tests); `.github/workflows/tests.yml`; **402 passed, 6 deselected**; gate G6 passed except CI (B-05). `verified_threshold` 0.62 -> **0.63**; false-`Verified` 0.125 -> **0.000**. Two verifier defects found by the evaluation and fixed |
 | 2026-10-08 | 6 | Documentation reconciliation after the gate: repaired duplicated/misnumbered headings in this file, filled the Phase 4-6 evidence rows in 01/12/13, measured results into 10 ?11 and 12 ?9, retired R-01/R-11/R-15, added **R-24** (abstention 0.000) and A-06/A-07, corrected `labeller_a`/`labeller_b` to be described as a self-reconciliation rather than independent annotators, and fixed 2 broken cross-links. No product code changed; suite re-run green at 371 passed |
+| 2026-10-08 | 7 | `logs/` created with 9 captured command outputs + README; **[16_STAGE_3_REPORT_DRAFT.md](16_STAGE_3_REPORT_DRAFT.md) drafted from the tracker**; [01 ?3.1](01_REQUIREMENTS.md#31-stage-3-versus-stage-2-deviations-log) D-11->D-19; **I-01 checked and did not reproduce** - R-04 closed; viva beat 4 rewritten after R-24; tracker ?9 rewritten for Phase 7. Gate G7 **not passed**: 7.2 screenshots and 7.4 contributions need a human |
+| 2026-10-08 | 7 | **Three live verifier defects found and fixed** (antonym branch searched `claim & chunk`, which by construction excludes the token an antonym contradiction turns on; the negation guard read a stopword-filtered set in which `not` can never appear; the antonym list paired inflections individually so cross-forms never met). Inflections now grouped by concept with seven named oppositions, and the check declines when the passage uses the claim's own direction. Accuracy unchanged at 0.667, threshold unchanged at 0.63, so no re-calibration was needed and none is claimed. 31 direct tests; **402 passed, 6 deselected**. **R-25 stays open**: the antonym branch is correct code and unit-tested, but no labelled case exercises it |

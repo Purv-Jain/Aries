@@ -1,13 +1,13 @@
 # 09 — Testing Strategy
 
-**Status:** Phase 5 delivered · Last updated 2026-10-08 · **325 passed, 6 deselected**
+**Status:** Phase 7 baseline · Last updated 2026-10-08 · **402 passed, 6 deselected**
 **Related:** [Requirements §6](01_REQUIREMENTS.md#6-edge-cases-must-be-handled-not-merely-considered) · [Roadmap](06_IMPLEMENTATION_ROADMAP.md) · [Data Contracts §12](08_DATA_MODELS_AND_API_CONTRACTS.md#12-contract-tests)
 
 ---
 
 ## 1. Current state — stated plainly
 
-`pytest -q` reports **325 passed, 6 deselected**, with no failures and no skips, as of 2026-10-08
+`pytest -q` reports **402 passed, 6 deselected**, with no failures and no skips, as of 2026-10-08
 after Phase 5. The 6 deselected tests carry the `semantic` marker and need MiniLM and FLAN-T5 weights
 that are not on this machine — their result is **unmeasured**, not passed. Real output and the
 per-scenario coverage table are in
@@ -58,7 +58,7 @@ tests/
     TestStoreFactory               # store protocol
     TestPipelineConfigContract     # FR-21 config validation
     TestSemanticProfile            # FR-17 — marked `semantic`, deselected by default
-  test_verification.py    # 83 tests — generation, verification, abstention, injection
+  test_verification.py    # 114 tests — generation, verification, abstention, injection
 test_ui.py              # 98 tests — import boundary, escaping, design tokens, contrast, startup
     TestMarkerGrammar            # CT-17, marker stripping
     TestOverlap                   # containment vs Jaccard reasoning

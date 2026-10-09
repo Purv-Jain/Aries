@@ -199,14 +199,15 @@ class ExtractiveGenerator:
         chosen = best[:limit]
 
         claims: list[Claim] = []
-        for _, _, chunk, position, sentence in sorted(chosen, key=lambda item: (item[1], item[3])):
-            markers = build_markers(chunk, labels)
-            rendered = f"{sentence} [{markers[0].raw}]" if markers else sentence
+        # Candidate tuples are (score, chunk_id, chunk, position, sentence); only the chunk and the
+        # sentence are needed here. Claims are re-numbered by their order in *this* answer rather than
+        # reusing the sentence's position in its own chunk, so `clm_` ids stay dense and stable.
+        for _, _, chunk, _, sentence in sorted(chosen, key=lambda item: (item[1], item[3])):
             claims.append(
                 Claim(
                     claim_id=f"clm_{len(claims)}",
                     text=_WS_RUN.sub(" ", sentence).strip(),
-                    markers=markers,
+                    markers=build_markers(chunk, labels),
                     position=len(claims),
                 )
             )

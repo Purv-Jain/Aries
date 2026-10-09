@@ -105,7 +105,7 @@ These are **not** fatal, but Stage 3 should not silently inherit them:
 
 | # | Finding | Location | Impact |
 |---|---|---|---|
-| I-01 | Reference list dropped Magesh et al. (Stage 1 `[4]`), so Stage 2's literature review `[4]` now points to Asai/Self-RAG while the prose still discusses "Hallucination-Free? Assessing the Reliability of Leading AI Legal Research Tools" ideas | Stage 2 §4 vs. reference list `[4]` | A reader following `[4]` finds the wrong paper. **Fix the numbering in Stage 3.** |
+| ~~I-01~~ | Reference list dropped Magesh et al. (Stage 1 `[4]`), so Stage 2's `[4]` was suspected of pointing at Asai/Self-RAG while the prose still discussed "Hallucination-Free? Assessing the Reliability of Leading AI Legal Research Tools" | Stage 2 §2.1.5 vs. reference list `[4]` | **Checked in Phase 7 against the extracted text; the suspicion was wrong.** "Magesh", "legal research" and "hallucination-free" occur **0 times** in the Stage 2 report. Stage 2 dropped the Magesh citation *and* its prose together, and its single `[4]` now correctly supports the Self-RAG sentence. A citation audit also found **0 dangling and 0 orphaned references** in Stage 2. Stage 3 still cites only what it read ([D-19](01_REQUIREMENTS.md#31-stage-3-versus-stage-2-deviations-log)) rather than renumbering a list it did not write |
 | I-02 | Stage 2 §2.1.2 says chunking "is sentence-aware and preserves the source filename and page number" but the Stage 2 module table (`Table 2`) shows no explicit sentence-splitting dependency | Stage 2 §2.1.2, Table 2 | Implementation detail was never pinned down. Specify regex-based sentence splitting in [ADR-0003](05_TECH_STACK_AND_ADRS.md#adr-0003--sentence-splitting-without-an-nlp-dependency). |
 | I-03 | Chunking described in §1.1 as "sentence-aware overlapping" but no sentence-boundary algorithm named | Stage 2 §1.1 | Same as I-02 |
 | I-04 | TC-05 expects a ChromaDB ranking inside the offline validation profile | Stage 2 Table 10 | See G-14 |
@@ -159,7 +159,7 @@ Ordered by dependency. Full detail in [06_IMPLEMENTATION_ROADMAP.md](06_IMPLEMEN
 | Python version | Only 3.14.6 available; Stage 2 pinned 3.13.5. `chromadb 1.5.9` ships a `cp39-abi3-win_amd64` wheel (forward-compatible, so it *should* install on 3.14) but this is unverified on this machine. | [R-01](14_RISK_REGISTER.md) |
 | Unverifiable historical numbers | 10/10 tests, 28 chunks, 11 pages, 4 commit hashes — none reproducible. High temptation to reuse them in Stage 3. | [R-02](14_RISK_REGISTER.md) |
 | Missing 20-case set | Stage 1 claims the cases were "already prepared beforehand". They are not in the workspace. Phase 6 must create them without predetermining results. | [R-03](14_RISK_REGISTER.md) |
-| Stage 2 citation mis-numbering | I-01 will be inherited unless corrected. | [R-04](14_RISK_REGISTER.md) |
+| Stage 2 citation mis-numbering | I-01 **checked in Phase 7 and not reproduced** — Stage 2's numbering is self-consistent. Stage 3 cites only what it read. | [R-04, closed](14_RISK_REGISTER.md) |
 | Time | Planning must not consume the 3–5 day build budget. | [R-05](14_RISK_REGISTER.md) |
 
 ## 6. Audit conclusion

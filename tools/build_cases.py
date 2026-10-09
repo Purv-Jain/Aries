@@ -27,7 +27,6 @@ Re-running it is idempotent and cannot change a label.
 from __future__ import annotations
 
 import json
-import re
 import sys
 from pathlib import Path
 
@@ -345,12 +344,19 @@ def main() -> int:
     # is a join of separately-normalised chunks; the characters themselves must still match.
     flat_passages = [_flatten(json.loads(line)["passage"]) for line in lines]
     flat_chunks = [_flatten(c.text) for c in chunks]
+    # A passage may be spliced from any chunk on its page, so membership is tested against the whole
+    # corpus. Only the case id and its passage are needed here; pairing positionally with chunks would
+    # imply a correspondence that does not exist.
     bad = [
         case_id
-        for case_id, passage, chunk_text in zip(JUDGEMENTS, flat_passages, flat_chunks)
+        for case_id, passage in zip(JUDGEMENTS, flat_passages)
         if not any(passage in text for text in flat_chunks)
     ]
-    print("verbatim check:", "all 24 passages found in the extraction" if not bad else f"FAILED {bad}")
+    total = len(flat_passages)
+    print(
+        "verbatim check: "
+        + (f"all {total} passages found in the extraction" if not bad else f"FAILED {bad}")
+    )
     return 0 if not bad else 1
 
 

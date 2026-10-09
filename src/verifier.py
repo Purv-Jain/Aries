@@ -84,25 +84,62 @@ NEGATION_CUES: frozenset[str] = frozenset(
     {"not", "no", "never", "none", "neither", "nor", "cannot", "without", "lacks", "lacking", "failed"}
 )
 
-# Small curated antonym set for academic prose. Deliberately short: a large hand-built antonym list
-# is a liability in a system with no training data, and false antonymy would push correct claims into
-# `Unsupported`. Each pair must genuinely invert the polarity of the sentence.
-ANTONYM_PAIRS: tuple[tuple[str, str], ...] = (
-    ("increase", "decrease"),
-    ("increases", "decreases"),
-    ("increased", "decreased"),
-    ("higher", "lower"),
+# Small curated antonym set for academic prose, grouped by **concept** rather than listed as
+# surface forms, with the oppositions declared explicitly.
+#
+# The earlier form listed inflections as separate pairs -- ("increase","decrease"),
+# ("increased","decreased"), ("increases","decreases"). That made cross-forms invisible: a claim
+# saying "increased" and a passage saying "decreased" never met, because each was paired only with
+# its own inflection. Grouping the forms of one concept fixes that: every form now conflicts with
+# every form of the opposite concept.
+#
+# The oppositions are declared separately rather than cross-pairing every concept with every other.
+# Pairing them all looks tidier and is wrong: academic words are polysemous, so "increased" (rising
+# quantity) and "cost" (a loss) would be declared antonyms, and "The cost increased" would be
+# reported as self-contradictory. Seven named oppositions keep every pair defensible by inspection.
+#
+# Still deliberately short. A large hand-built antonym list is a liability in a system with no
+# training data, and false antonymy pushes a correct claim into `Unsupported` -- a worse failure than
+# missing a contradiction, because it suppresses a citation the user can see is right.
+ANTONYM_CONCEPTS: dict[str, tuple[str, ...]] = {
+    "up": ("increase", "increases", "increased", "increasing", "rise", "rises", "grew", "grown"),
+    "down": ("decrease", "decreases", "decreased", "decreasing", "reduction", "reduce", "reduces",
+             "reduced", "fall", "falls", "fell", "drop", "drops", "dropped"),
+    "more": ("higher", "greater", "larger", "more", "exceed", "exceeds", "exceeded"),
+    "less": ("lower", "fewer", "smaller", "less", "limited"),
+    "good": ("improve", "improves", "improved", "improving", "beneficial", "effective",
+             "successful"),
+    "bad": ("worsen", "worsens", "worsened", "worsening", "degrade", "degrades", "degraded",
+            "harmful", "ineffective", "unsuccessful"),
+    "gain": ("gain", "gains", "gained", "benefit", "benefits", "profitable"),
+    "loss": ("loss", "losses", "lost", "cost", "costs", "expensive", "unprofitable"),
+    "present": ("present", "exists", "existing", "includes", "included", "contains", "contained"),
+    "absent": ("absent", "missing", "excludes", "excluded", "omitted", "lacks", "lacking",
+               "without", "devoid"),
+    "agree": ("supports", "supported", "confirm", "confirms", "confirmed", "corroborates",
+              "corroborated", "validates", "validated", "agrees", "agreed", "consistent"),
+    "disagree": ("contradicts", "contradicted", "refute", "refutes", "refuted", "dispute",
+                 "disputes", "disputed", "denies", "denied", "opposes", "opposed", "conflicts",
+                 "conflicted", "inconsistent"),
+    "large_effect": ("significant", "substantially", "markedly", "notably", "considerably"),
+    "small_effect": ("insignificant", "negligible", "marginally", "slightly", "barely"),
+}
+
+ANTONYM_OPPOSITIONS: tuple[tuple[str, str], ...] = (
+    ("up", "down"),
     ("more", "less"),
-    ("positive", "negative"),
-    ("improve", "worsen"),
-    ("improves", "worsens"),
-    ("improved", "worsened"),
+    ("good", "bad"),
     ("gain", "loss"),
-    ("significant", "insignificant"),
-    ("supports", "contradicts"),
-    ("effective", "ineffective"),
     ("present", "absent"),
-    ("increases", "reduces"),
+    ("agree", "disagree"),
+    ("large_effect", "small_effect"),
+)
+
+ANTONYM_PAIRS: tuple[tuple[str, str], ...] = tuple(
+    (left_form, right_form)
+    for left_concept, right_concept in ANTONYM_OPPOSITIONS
+    for left_form in ANTONYM_CONCEPTS[left_concept]
+    for right_form in ANTONYM_CONCEPTS[right_concept]
 )
 
 _ANTONYM_MAP: dict[str, set[str]] = {}
@@ -236,28 +273,60 @@ def _negations_in_matching_region(text: str, claim_tokens: set[str]) -> set[str]
     return best
 
 
-def _antonym_conflict(claim_tokens: set[str], chunk_tokens: set[str]) -> str | None:
-    """Return the antonym pair on which the claim and chunk disagree, if any."""
-    for token in sorted(claim_tokens & chunk_tokens):
+def _antonym_conflict(
+    claim_tokens: set[str], chunk_tokens: set[str], claim_text: str = ""
+) -> str | None:
+    """Return the antonym pair on which the claim and chunk disagree, if any.
+
+    Iterates the claim's own tokens, **not** the tokens it shares with the chunk. An earlier version
+    looped over ``claim_tokens & chunk_tokens``, which is the wrong set: a contradiction means the
+    claim uses one member of a pair and the passage the other, so the token under test is by
+    definition absent from the intersection. The function therefore fired only when the passage
+    happened to contain *both* members -- the opposite of the disagreement it was looking for -- and
+    the antonym branch was effectively dead.
+
+    ``claim_text`` is the raw claim, not its filtered tokens. Four of the ten negation cues are
+    stopwords, so they cannot survive ``content_tokens`` and a token-set check would never see them.
+
+    **Declines when the passage also supports the claim.** The earlier requirement was only that the
+    passage contain *some* opposite form, which misfires on any passage that reports both directions
+    -- "Accuracy increased while latency decreased" against a claim about accuracy alone. A passage
+    that mentions the claim's own direction as well is not contradicting it; it is describing a
+    mixed result. So the claim's token must be **absent** from the passage for a conflict to stand.
+
+    This makes the check stricter than the earlier one in two ways at once, and both push toward
+    missing a contradiction rather than inventing one. That is the deliberate direction: a false
+    contradiction flag pushes a correct claim into `Unsupported` and suppresses a citation the user
+    can see is right.
+    """
+    if _claim_is_negated(claim_text):
+        return None
+    for token in sorted(claim_tokens):
         opposites = _ANTONYM_MAP.get(token)
         if not opposites:
             continue
-        # A negation on either side can turn an antonym into agreement: "did not increase" and
-        # "did not decrease" are opposite claims, not agreement. Checking the plain case only is
-        # safer than the clever case, because a wrong contradiction flag suppresses a real citation.
-        if (opposites & chunk_tokens) and not _negations_around(claim_tokens, token):
-            return f"{token}/{sorted(opposites & chunk_tokens)[0]}"
+        if token in chunk_tokens:
+            # The passage uses this direction too, so it is not asserting the opposite of the claim.
+            continue
+        shared_opposite = opposites & chunk_tokens
+        if shared_opposite:
+            return f"{token}/{sorted(shared_opposite)[0]}"
     return None
 
 
-def _negations_around(tokens: set[str], token: str) -> bool:
-    """True when the claim's own vocabulary already contains a negation cue.
+def _claim_is_negated(text: str) -> bool:
+    """True when the text contains any negation cue, read from raw tokens.
 
-    A coarse, honest approximation: this module does not do dependency parsing, so it does not claim
-    to know which word the negation modifies. When in doubt it declines to raise a contradiction,
-    because a false contradiction flag pushes a correct claim into `Unsupported`.
+    Deliberately **not** routed through ``content_tokens``, which drops stopwords -- and ``not``,
+    ``no``, ``nor`` and ``without`` are all stopwords. Filtering negation through the same function
+    that removes low-value tokens would delete most of the signal, so the guard would silently never
+    fire for the commonest cue in English. That failure mode is invisible: the code runs, produces
+    plausible numbers, and is wrong.
+
+    This module does no dependency parsing, so it does not claim to know which word a negation
+    modifies. It asks only whether one is present anywhere in the claim.
     """
-    return bool(tokens & NEGATION_CUES)
+    return bool(set(_WORD.findall(text.lower())) & NEGATION_CUES)
 
 
 class Verifier:
@@ -286,7 +355,7 @@ class Verifier:
             return ()
 
         return tuple(
-            self._verify_claim(claim, by_label, retrieved, config)
+            self._verify_claim(claim, by_label, config)
             for claim in answer.claims
         )
 
@@ -296,7 +365,6 @@ class Verifier:
         self,
         claim: Claim,
         by_label: dict[str, RetrievalResult],
-        retrieved: Sequence[RetrievalResult],
         config: VerificationConfig,
     ) -> ClaimVerification:
         claim_text = strip_markers(claim.text) or claim.text
@@ -337,7 +405,7 @@ class Verifier:
         claim_tokens = content_tokens(claim_text)
         chunk_tokens = content_tokens(evidence_text)
         if config.check_contradiction:
-            conflict = _antonym_conflict(claim_tokens, chunk_tokens)
+            conflict = _antonym_conflict(claim_tokens, chunk_tokens, claim_text)
             if conflict is not None:
                 left, right = conflict.split("/")
                 return ClaimVerification(
@@ -363,8 +431,6 @@ class Verifier:
             # correct paraphrase as a contradiction.
             claim_negated = bool(_negations(claim_text))
             region_negated = bool(_negations_in_matching_region(evidence_text, claim_tokens))
-            claim_neg = _negations(claim_text)
-            relevant_chunk_neg = _negations_in_matching_region(evidence_text, claim_tokens)
             if claim_negated != region_negated and (claim_tokens & chunk_tokens):
                 # Only decisive when the shared vocabulary is substantial; otherwise every short
                 # claim would trip this and the check would be noise.

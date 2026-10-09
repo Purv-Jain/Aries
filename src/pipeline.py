@@ -39,7 +39,6 @@ from src.generator import AnswerGenerator, build_generator
 from src.models import (
     USER_MESSAGES,
     AnswerResponse,
-    ChunkConfig,
     ClaimVerification,
     DocumentPage,
     DocumentSummary,
@@ -50,7 +49,6 @@ from src.models import (
     PipelineConfig,
     QueryMetrics,
     Reason,
-    ResourceLimits,
     RetrievalResult,
     VerificationConfig,
     VerificationSummary,
@@ -319,7 +317,7 @@ class ResearchPipeline:
             self._chunk_counts[source_id] = len(chunks)
             self._total_pages += len(pages)
             summaries.append(summary)
-            warnings.extend(_page_warnings(pages, self._config))
+            warnings.extend(_page_warnings(pages))
 
         self._warnings = warnings
         self._store.persist()
@@ -627,7 +625,7 @@ class ResearchPipeline:
         return self._store.query(query_vector, top_k)
 
 
-def _page_warnings(pages: Sequence[DocumentPage], config: PipelineConfig) -> list[str]:
+def _page_warnings(pages: Sequence[DocumentPage]) -> list[str]:
     """Surface per-page oddities once, not once per page.
 
     Injection-shaped text is the important one: the user needs to know a document is trying to

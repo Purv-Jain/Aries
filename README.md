@@ -1,8 +1,8 @@
 # RAG-Based Academic Research Assistant with Citation Verification
 
-**Status:** Phase 6 complete — built, tested, calibrated and measured on a real 15-page paper.
-**Current gate:** `AWAITING PHASE 7 APPROVAL`
-**Tests:** `pytest -q` → **371 passed, 6 deselected**, 0 failures (2026-10-08)
+**Status:** Phase 7 in progress — built, tested, calibrated, measured, and the Stage 3 report drafted.
+**Current gate:** `PHASE 7 ACTIVE — GATE G7 NOT YET PASSED`
+**Tests:** `pytest -q` → **402 passed, 6 deselected**, 0 failures (2026-10-08)
 **Run it:** `streamlit run app.py`
 **Last updated:** 2026-10-08
 
@@ -64,7 +64,7 @@ No LangChain. No paid APIs. No GPU requirement. Rationale in
 | `src/verifier.py` | **The project's contribution.** Marker grammar, resolution, containment overlap, `0.7·sim + 0.3·overlap`, numeric and contradiction checks, config-driven labels | implemented, tested |
 | `tests/test_core.py` | 64 tests — ingestion, limits, chunking, ID contracts, security | implemented, all passing |
 | `tests/test_retrieval.py` | 80 tests — embeddings, stores, retrieval, persistence, degradation | implemented, all passing |
-| `tests/test_verification.py` | 83 tests — generation, verification, abstention, injection defence | implemented, all passing |
+| `tests/test_verification.py` | 114 tests — generation, verification, abstention, injection defence | implemented, all passing |
 | `tests/test_ui.py` | 98 tests — renders, states, inspector, contrast, no-placeholder audit | implemented, all passing |
 | `tests/test_hardening.py` | 46 tests — evaluation integrity, calibration re-run, security sweep, determinism, metrics, CLI, CI config | implemented, all passing |
 | `tests/conftest.py` | The in-process PDF builder and every document fixture | implemented |
@@ -119,8 +119,10 @@ of 0.62 was inherited from Stage 2 and carried a measured false-`Verified` rate 
 ### What the measurements say, including the unflattering parts
 
 Measured on the real 15-page report: Recall@1 **0.667**, Recall@3/5/10 **1.000**, MRR **0.778**,
-indexing **2.67 s per 100 pages**, query p50/p95 **12.86/16.00 ms**, peak RAM **191.6 MB**,
-determinism **5/5** byte-identical runs.
+indexing **3.236 s per 100 pages**, query p50/p95 **12.40/15.55 ms**, peak RSS **191.3 MB**,
+determinism **5/5** byte-identical runs. Latency and RSS vary a little between runs; the captured
+figures are in [logs/04_measure.txt](logs/04_measure.txt), and the recall, MRR and calibration
+results reproduce exactly.
 
 **The abstention test failed.** Asked about mercury's boiling point, the 2019 Cricket World Cup and
 photosynthesis — none of them in the corpus — the offline profile answered all three, citing the
@@ -154,6 +156,8 @@ Read these in order if you are new.
 | [13_TEAM_CONTRIBUTIONS.md](docs/13_TEAM_CONTRIBUTIONS.md) | Planned ownership vs. verified actual contributions |
 | [14_RISK_REGISTER.md](docs/14_RISK_REGISTER.md) | Live risk register with owners and mitigations |
 | [15_PROGRESS_TRACKER.md](docs/15_PROGRESS_TRACKER.md) | Phase status, blockers, next action |
+| [16_STAGE_3_REPORT_DRAFT.md](docs/16_STAGE_3_REPORT_DRAFT.md) | **Stage 3 report draft** — 15 sections, every number backed by a captured log. Not submission-ready; see its §15 |
+| [logs/README.md](logs/README.md) | **Reproducible command logs** — 9 captured outputs with the command that regenerates each |
 | [AGENTS.md](AGENTS.md) | **Mandatory reading** for any AI agent working in this repo |
 
 ## The interface
@@ -203,7 +207,7 @@ nothing depends on colour alone. Full spec in
 python -m venv .venv
 .venv\Scripts\activate                      # Windows
 pip install -r requirements.txt             # verified working on CPython 3.14.6
-pytest -q                                   # 371 passed, 6 deselected as of 2026-10-08
+pytest -q                                   # 402 passed, 6 deselected as of 2026-10-08
 pytest -q -m semantic                       # needs MiniLM + FLAN-T5 weights; never run yet
 streamlit run app.py                        # the application
 python run_demo.py --pdf <path>             # CLI: index -> ask -> verify, exit 0/1/2
@@ -216,7 +220,7 @@ python tools/measure.py --pdf <path>        # latency, Recall@k, RAM, determinis
 repository** (B-07). Without it they skip rather than fail.
 
 Use the pinned interpreter. `C:\Python314\python.exe` happens to have most of the stack, but the
-**verified** environment is `.venv`, and that is where all 371 passing tests were observed.
+**verified** environment is `.venv`, and that is where all 402 passing tests were observed.
 
 ## Licence and attribution
 

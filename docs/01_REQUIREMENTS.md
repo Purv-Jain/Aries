@@ -163,6 +163,24 @@ Stage 2 overrides Stage 1. This log is the audit trail; do not silently discard 
 > [ADR-0001](05_TECH_STACK_AND_ADRS.md#adr-0001--pin-the-python-version) and
 > [R-01, retired](14_RISK_REGISTER.md).
 
+### 3.1 Stage 3 versus Stage 2 deviations log
+
+Stage 2 remains the authority on *scope*. Where Stage 3 departs from it, the departure is recorded
+here rather than made silently in the code. Every row was forced by something measured or tested
+during Phases 2–6; none is a preference.
+
+| # | Stage 2 said / implied | Stage 3 does | Why | Status |
+|---|---|---|---|---|
+| **D-11** | `verified_threshold = 0.62`, presented as a working default | **`0.63`, chosen from a sweep over a 24-case labelled set** | 0.62 was an unmeasured figure inherited from Stage 2. At 0.62 the measured false-`Verified` rate is **0.125** — one contradicted claim was labelled `Verified`. At 0.63 it is **0.000** | **Implemented, evidence: [10 §11](10_EVALUATION_METRICS.md#11-results-table--measured-in-phase-6), [logs/05_evaluate.txt](../logs/05_evaluate.txt)** |
+| **D-12** | Chunking is "sentence-aware"; no algorithm named | **Regex sentence splitter, documented as [ADR-0003](05_TECH_STACK_AND_ADRS.md#adr-0003--sentence-splitting-without-an-nlp-dependency)** | Stage 2's module table showed no sentence-splitting dependency, so the behaviour was unimplementable as written ([I-02](03_GAP_ANALYSIS.md#31-internal-inconsistencies-found-in-the-stage-2-report), [I-03](03_GAP_ANALYSIS.md#31-internal-inconsistencies-found-in-the-stage-2-report)). ~40 testable lines beat an NLTK/spaCy dependency | **Implemented** |
+| **D-13** | `token_overlap` unspecified | **Containment (claim ⊆ passage), not Jaccard**, per [D-06 in the tracker](15_PROGRESS_TRACKER.md#5-decisions-log) | Claims are short summaries of long passages. Jaccard systematically under-scores correct citations, which would have made the verifier wrong rather than merely blunt | **Implemented** |
+| **D-14** | Contradiction detection not described | **Numeric, negation-polarity and antonym checks added** | High lexical overlap can still mean a contradiction — precisely the case a support threshold cannot catch. Stage 2's formula had no such check | **Implemented**, and both checks were themselves corrected during Phase 6 after the evaluation exposed false positives |
+| **D-15** | Prompt injection not addressed | **Injection detection and flagging; PDF text is data, never instruction** ([SEC-05](01_REQUIREMENTS.md#5-security-requirements)) | Retrieved PDF content is untrusted input. Stage 2 never mentioned it | **Implemented** |
+| **D-16** | "ChromaDB chunk ranked first" expected inside the **offline** validation profile | **In-memory store in the offline profile; Chroma exercised by its own tests** ([G-14](03_GAP_ANALYSIS.md#32-requirements-stage-2-never-covered)) | Chroma is a persistence component, not an offline-profile component. The original expectation contradicted its own profile definition | **Corrected**, see [I-04](03_GAP_ANALYSIS.md#31-internal-inconsistencies-found-in-the-stage-2-report) |
+| **D-17** | "28 chunks from 11 pages" quoted as a result | **Not quoted. Our own measurement: 15 pages → 46 chunks** | Stage 2's figures are internally inconsistent with its own stated ~180-word chunk size ([I-05](03_GAP_ANALYSIS.md#31-internal-inconsistencies-found-in-the-stage-2-report)). Repeating them would have handed an examiner a calculator question | **Corrected**, evidence: [logs/03_run_demo.txt](../logs/03_run_demo.txt) |
+| **D-18** | No statement about what the system does when nothing relevant is retrieved | **Abstention implemented and tested — and then measured to fail on non-empty indexes (R-24)** | Stage 2 asserted the capability; Stage 3 tested it. The empty-index path works; the non-empty-but-irrelevant path does not, at a measured abstention rate of **0.000**. Reporting the failure is the honest outcome | **Implemented, with the limitation documented as [R-24](14_RISK_REGISTER.md)** |
+| **D-19** | Reference list dropped Magesh et al. (Stage 1 `[4]`) while keeping prose that discussed it | **Stage 3 cites only what it read.** The Stage 3 reference list carries the papers Stage 3 actually used, each with the URL or identifier it was read from | Stage 2's `[4]` resolves to Asai/Self-RAG, and the Stage 2 prose no longer discusses Magesh — the drop was consistent, but the gap made the numbering look broken to a reader holding Stage 1 in hand. Stage 3 avoids the trap rather than renumbering a list it did not write ([I-01](03_GAP_ANALYSIS.md#31-internal-inconsistencies-found-in-the-stage-2-report)) | **Verified against the extracted text, not assumed** |
+
 ## 4. Non-functional requirements
 
 | ID | Requirement | Metric | Target | Verification method |
@@ -246,5 +264,5 @@ claims. Full detail: [12_STAGE_3_EVIDENCE_TRACKER.md](12_STAGE_3_EVIDENCE_TRACKE
 | 3 | FR-16→FR-28 | Retrieval tests pass, offline path green | **Gate G3 passed.** 13 FR verified by `pytest -q` → 144 passed. FR-15 and FR-17 unmeasured |
 | 4 | FR-29→FR-40 | Verification tests pass, abstention works | **Gate G4 passed.** 12 FR + 6 CT verified by `pytest -q` → 227 passed. FLAN-T5 success path unmeasured |
 | 5 | FR-41→FR-47, NFR-10 | All UI states render real data | **Gate G5 passed.** 7 FR + 98 UI tests; headless HTTP 200; 13 contrast ratios measured. 3 manual visual checks pending (R-23) |
-| 6 | FR-48→FR-50, NFR-01→09, NFR-11 | Full suite green + metrics measured | **Gate G6 passed except CI.** `pytest -q` → **371 passed, 6 deselected**; 13 metrics measured on the real report; 46 hardening tests. CI cannot run — no repository (B-08). NFR-01's semantic half unmeasured |
+| 6 | FR-48→FR-50, NFR-01→09, NFR-11 | Full suite green + metrics measured | **Gate G6 passed except CI.** `pytest -q` → **402 passed, 6 deselected** (371 at the G6 gate; +7 added with the Phase 7 verifier fixes); 13 metrics measured on the real report; 46 hardening tests. CI cannot run — no repository (B-08). NFR-01's semantic half unmeasured |
 | 7 | — | Evidence tracker complete, demo rehearsed | *empty — not built* |

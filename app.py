@@ -34,11 +34,9 @@ from src.models import (
     VERIFICATION_LABELS,
     AnswerResponse,
     ChunkConfig,
-    ClaimVerification,
     IngestFailure,
     PipelineConfig,
     ResourceLimits,
-    VerificationConfig,
 )
 from src.pipeline import ResearchPipeline
 
@@ -644,7 +642,7 @@ def render_library(pipeline: ResearchPipeline) -> None:
         with column_b:
             if st.button("Reindex", use_container_width=True, key="reindex_doc"):
                 try:
-                    path = _source_path(pipeline, chosen)
+                    path = _source_path(chosen)
                 except FileNotFoundError:
                     st.warning(
                         "This document was not uploaded in this session, so its file is not "
@@ -676,7 +674,7 @@ def render_library(pipeline: ResearchPipeline) -> None:
                     st.rerun()
 
 
-def _source_path(pipeline: ResearchPipeline, source_id: str) -> Path:
+def _source_path(source_id: str) -> Path:
     """The staged file for a source id, or `FileNotFoundError` if it is not in this session.
 
     The pipeline keeps counts, not paths, by design: SEC-07 keeps writes inside the project and an

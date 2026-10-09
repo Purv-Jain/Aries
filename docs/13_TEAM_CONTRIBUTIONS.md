@@ -105,7 +105,7 @@ No feature merges without a second reader.
 
 **Still empty after Phase 6 — and not because nothing was written, because there is nothing to
 read.** `git status` in this directory returns `fatal: not a git repository`. Phases 2 to 6 produced
-nine source modules, a five-file test suite of **371 passing tests**, four CLI/measurement tools and
+nine source modules, a five-file test suite of **402 passing tests**, four CLI/measurement tools and
 the full document set, and **none of it is under version control** (blocker **B-05** in
 [15_PROGRESS_TRACKER.md §6](15_PROGRESS_TRACKER.md#6-blockers)).
 

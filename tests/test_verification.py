@@ -44,8 +44,14 @@ from src.models import (
 )
 from src.pipeline import ResearchPipeline, summarise
 from src.verifier import (
+    ANTONYM_CONCEPTS,
+    ANTONYM_OPPOSITIONS,
     MARKER_PATTERN,
     Verifier,
+    _antonym_conflict,
+    _claim_is_negated,
+    _negations_in_matching_region,
+    _WORD,
     content_tokens,
     parse_markers,
     strip_markers,
@@ -197,6 +203,151 @@ class TestOverlap:
 
     def test_very_short_tokens_are_dropped(self) -> None:
         assert "a" not in content_tokens("a bb ccc")
+
+
+# --------------------------------------------------------------------------
+# The contradiction helpers, tested directly.
+#
+# These were previously reachable only through `verify()`. That is not enough for two functions
+# whose whole job is a judgement call: `_antonym_conflict` decides whether a citation is suppressed
+# and `_claim_is_negated` is the guard that stops it suppressing a correct one. A regression in either
+# shows up in the labelled-set metrics as a number that moved, with no test naming the cause.
+# --------------------------------------------------------------------------
+
+
+class TestAntonymConcepts:
+    """The curated list is data, so its invariants are tested like code.
+
+    A cross-form gap sat in this list for six phases: inflections were paired individually, so
+    ("increase","decrease") and ("increased","decreased") never crossed and a claim saying "increased"
+    against a passage saying "decreased" reported no conflict. Concepts are now grouped, with the
+    oppositions declared explicitly rather than cross-pairing every concept with every other.
+    """
+
+    def test_every_concept_form_is_a_single_matchable_token(self) -> None:
+        for name, forms in ANTONYM_CONCEPTS.items():
+            for form in forms:
+                assert _WORD.fullmatch(form), f"{name}: {form!r} cannot be matched by the word regex"
+
+    def test_no_form_appears_in_two_concepts(self) -> None:
+        # A form in two concepts would make the map depend on declaration order.
+        all_forms = [form for forms in ANTONYM_CONCEPTS.values() for form in forms]
+        duplicates = {form for form in all_forms if all_forms.count(form) > 1}
+        assert duplicates == set(), f"a form may not belong to two concepts: {duplicates}"
+
+    def test_every_concept_takes_part_in_at_least_one_opposition(self) -> None:
+        named = {name for pair in ANTONYM_OPPOSITIONS for name in pair}
+        assert named == set(ANTONYM_CONCEPTS), (
+            "a concept in no opposition is dead weight; one missing from the list is unreachable"
+        )
+
+    def test_oppositions_reference_declared_concepts(self) -> None:
+        for left, right in ANTONYM_OPPOSITIONS:
+            assert left in ANTONYM_CONCEPTS and right in ANTONYM_CONCEPTS
+
+    @pytest.mark.parametrize(
+        ("claim", "passage"),
+        [
+            ("Accuracy increased.", "Accuracy decreased."),
+            ("The cost increased.", "The cost was reduced."),
+            ("Costs increased.", "Costs saw a reduction."),
+            ("Scores were higher.", "Scores were fewer."),
+            ("Sample size was larger.", "Sample size was smaller."),
+            ("Results improved.", "Results worsened."),
+            ("The method is effective.", "The method is ineffective."),
+            ("The team gained funding.", "The team lost funding."),
+            ("It was profitable.", "It was expensive."),
+            ("The file is present.", "The file is missing."),
+            ("The section exists.", "The section is omitted."),
+            ("The result was confirmed.", "The result was refuted."),
+            ("The finding supports it.", "The finding disputes it."),
+            ("The claim is consistent.", "The claim is inconsistent."),
+            ("The effect is significant.", "The effect is negligible."),
+        ],
+    )
+    def test_every_opposition_is_detected_across_inflections(
+        self, claim: str, passage: str
+    ) -> None:
+        assert _antonym_conflict(content_tokens(claim), content_tokens(passage), claim) is not None
+
+    @pytest.mark.parametrize(
+        ("claim", "passage"),
+        [
+            # Polysemy: two words that are not antonyms despite being different concepts.
+            ("The cost increased.", "The cost rose sharply."),
+            ("The team gained funding.", "Funding increased substantially."),
+            ("The file is present.", "The file contains markers."),
+        ],
+    )
+    def test_words_from_different_concepts_are_not_antonyms(
+        self, claim: str, passage: str
+    ) -> None:
+        assert _antonym_conflict(content_tokens(claim), content_tokens(passage), claim) is None
+
+    def test_a_passage_reporting_both_directions_is_not_a_contradiction(self) -> None:
+        # The false positive that a purely "opposite is present" rule produces. A passage saying both
+        # "increased" and "decreased" is describing a mixed result, not denying the claim.
+        claim = "Accuracy increased."
+        passage = "Accuracy increased while latency decreased substantially."
+        assert _antonym_conflict(content_tokens(claim), content_tokens(passage), claim) is None
+
+    def test_the_claims_own_direction_in_the_passage_declines(self) -> None:
+        claim = "Results improved."
+        passage = "Results improved, then later worsened."
+        assert _antonym_conflict(content_tokens(claim), content_tokens(passage), claim) is None
+
+
+class TestContradictionHelpers:
+    def test_the_shared_token_set_is_not_the_right_one_to_search(self) -> None:
+        # A contradiction means the claim uses one member of a pair and the passage the other, so the
+        # token under test is never in the intersection. An earlier version looped over
+        # `claim_tokens & chunk_tokens` and therefore fired only when the passage contained *both*
+        # members -- the opposite of the disagreement it was looking for.
+        claim = content_tokens("Accuracy was higher in this profile.")
+        chunk = content_tokens("Accuracy was lower in this profile.")
+        assert not (claim & chunk) & {"higher"}, "the token under test must not be in the intersection"
+        assert _antonym_conflict(claim, chunk, "Accuracy was higher in this profile.") == "higher/lower"
+
+    def test_agreement_is_not_a_conflict(self) -> None:
+        claim = content_tokens("The chunk overlap is small.")
+        chunk = content_tokens("The chunk overlap is small in this configuration.")
+        assert _antonym_conflict(claim, chunk, "The chunk overlap is small.") is None
+
+    def test_a_negated_claim_is_not_flagged_as_contradicting(self) -> None:
+        # "did not increase" and "increased" are not in conflict: the claim asserts the opposite of
+        # what the passage asserts only when the negation is read. Without the guard the antonym
+        # branch would suppress a correct citation.
+        claim_text = "The chunk overlap did not increase."
+        chunk = content_tokens("The chunk overlap increased substantially.")
+        assert _antonym_conflict(content_tokens(claim_text), chunk, claim_text) is None
+
+    def test_unrelated_terms_produce_no_conflict(self) -> None:
+        assert _antonym_conflict(content_tokens("photosynthesis"), content_tokens("chromadb"), "photosynthesis") is None
+
+    def test_claim_negation_is_read_from_raw_text(self) -> None:
+        # `not`, `no`, `nor` and `without` are stopwords, so a token-set check built from
+        # `content_tokens` can never see them. Reading the raw text is what makes the guard work.
+        for cue in ("not", "no", "nor", "without", "never", "cannot", "none", "lacks"):
+            assert _claim_is_negated(f"the overlap is {cue} applied"), cue
+        assert _claim_is_negated("the overlap is applied") is False
+
+    def test_the_guard_would_be_dead_if_it_read_filtered_tokens(self) -> None:
+        # The failure this prevents, stated as an executable claim: four of the ten cues are
+        # stopwords, so a filtered token set cannot contain them.
+        filtered = content_tokens("The overlap is not applied")
+        assert "not" not in filtered
+        assert _claim_is_negated("The overlap is not applied") is True
+
+    def test_negation_is_read_from_the_best_matching_sentence_only(self) -> None:
+        # The failure this guards: a 180-word chunk containing "not an OCR engine" somewhere else
+        # made six plainly-supported claims return `contradiction_detected`.
+        claim_tokens = content_tokens("The report requires a paid API key for retrieval.")
+        text = (
+            "The application does not require an OCR engine at any point. "
+            "The report requires a paid API key for retrieval. "
+            "Uploads are stored locally on disk."
+        )
+        assert _negations_in_matching_region(text, claim_tokens) == set()
 
 
 # --------------------------------------------------------------------------

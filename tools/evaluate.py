@@ -24,10 +24,8 @@ from __future__ import annotations
 
 import argparse
 import json
-import statistics
 import sys
 import time
-from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -103,10 +101,6 @@ def verify_cases(
         backend.similarity(backend.embed_query(claim), backend.embed_documents([text]))[0]
     ))
 
-    by_page: dict[int, list] = {}
-    for chunk in chunks:
-        by_page.setdefault(chunk.page_number, []).append(chunk)
-
     results: list[CaseResult] = []
     for case in cases:
         # Locate the evidence chunk by *content*, never by position on the page. Taking the first
@@ -120,7 +114,6 @@ def verify_cases(
                 f"{case['case_id']}: its passage is not in the extraction; the case file "
                 "does not match the fixture. Run tools/build_cases.py."
             )
-        page_chunks = by_page.get(case["passage_page"], []) or [evidence_chunk]
 
         marker_source = case.get("marker_source", "S1")
         present = case.get("marker_source_present", True)

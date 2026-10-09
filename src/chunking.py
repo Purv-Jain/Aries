@@ -147,7 +147,7 @@ def chunk_page(page: DocumentPage, config: ChunkConfig | None = None) -> tuple[E
         if 0 < remaining < config.min_chunk_words and spans:
             # Absorb a stub tail into the chunk before it rather than emit a
             # fragment too small to embed meaningfully.
-            previous_start, previous_end = spans[-1]
+            previous_start, _previous_end = spans[-1]
             spans[-1] = (previous_start, total)
             break
 
