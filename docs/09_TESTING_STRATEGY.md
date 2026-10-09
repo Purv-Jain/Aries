@@ -372,10 +372,17 @@ deployment plumbing here.
 CI is a team-collaboration tool, not a deliverable. Nobody should spend deadline time on it beyond
 this file.
 
-**Written, never executed.** The workflow is real — [.github/workflows/tests.yml](../.github/workflows/tests.yml)
-exists, a test asserts it parses and disables the hub, and it pins the same `python-version: "3.14"`.
-But it **has never run**, because there is no git repository in this workspace (blocker **B-05** →
-**B-08**). No document may claim a green CI run.
+**Green, after a real fix.** The workflow runs: [run 37880879892](https://github.com/Purv-Jain/Aries/actions/runs/37880879892)
+on `66075b` has `offline (ubuntu-latest)`, `offline (windows-latest)` and `security-sweep` all
+`success`.
+
+The first run failed, and the reason is worth recording because it is a failure mode that looks
+like success. Three paths in the hardening tests were built from Windows-style string literals.
+On POSIX a backslash is an ordinary filename character, so `PROJECT_ROOT / r"tests\data\..."`
+resolves to a *single long filename* rather than a three-part path. Tests that merely checked
+`.exists()` would have skipped silently and the suite would have reported green while part of it
+never ran; the nine that read the file raised `FileNotFoundError` instead, which is why the job went
+red at all. `TestPathsAreCrossPlatform` now scans for the pattern so it cannot return.
 
 ## 8. Integrity rules for test reporting
 

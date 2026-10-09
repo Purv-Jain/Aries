@@ -207,7 +207,7 @@ support score and retrieval relevance as **separately labelled rows**.
 | `test_retrieval.py` | 80 | embeddings, stores, retrieval, persistence, degradation |
 | `test_verification.py` | 114 | generation, verification, abstention, injection defence |
 | `test_ui.py` | 98 | renders, states, inspector, contrast, no-placeholder audit |
-| `test_hardening.py` | 46 | evaluation integrity, calibration, security sweep, determinism, metrics, CLI, CI config |
+| `test_hardening.py` | 49 | evaluation integrity, calibration, security sweep, determinism, metrics, CLI, cross-platform paths, CI config |
 
 All 17 mandated edge cases and all 20 contract tests are covered.
 
@@ -221,7 +221,23 @@ this report claims nothing about them.
 index → ask → verify cycle to completion. The default path is not permitted to try the network.
 
 **Reproducibility.** A second virtual environment built from `requirements.txt` alone passes the same
-371 tests (run before the Phase 7 fixes added 7 tests). `pip check` → `No broken requirements found.`
+371 tests (run before the Phase 7 fixes added 34 tests). `pip check` → `No broken requirements found.`
+
+**Continuous integration is green on both platforms.** Run
+[37880879892](https://github.com/Purv-Jain/Aries/actions/runs/37880879892) on `66075b`:
+`offline (ubuntu-latest)`, `offline (windows-latest)` and `security-sweep` all `success`. Two OSes
+because PDF extraction is the layer most likely to differ between them, and a parsing difference that
+only appears on one platform is worth finding before a demonstration rather than during one.
+
+Getting there required a genuine cross-platform bug, and the shape of it is worth recording. Three
+paths in the hardening tests were built from Windows-style string literals. On POSIX a backslash is
+an **ordinary filename character**, so `PROJECT_ROOT / r"tests\data\eval_cases.jsonl"` resolves to a
+*single long filename* in the project root rather than a three-part path. Tests that merely checked
+`.exists()` would have **skipped silently** and the suite would have reported green on Linux while
+part of it never ran; the nine that read the file raised `FileNotFoundError` instead, which is why
+the job went red at all. A second instance in `tools/build_cases.py` — the script that regenerates
+the evaluation set — was missed by the first fix and is now corrected. `TestPathsAreCrossPlatform`
+scans `src/`, `tools/`, `tests/` and the entry scripts for the pattern, so it cannot return.
 
 ## 11. Evaluation
 
@@ -433,7 +449,7 @@ Stated plainly so the gap is not mistaken for oversight:
 |---|---|---|
 | Screenshots S1?S9 | Not captured. None would be fabricated | a human at the screen (7.2) |
 | Per-member contribution split | Two commits exist; the Phases 0-6 one carries a placeholder author, so it cannot decompose into three contributions (?13) | **B-05** ? disclosure chosen over rewriting history |
-| **Green CI run** | `ubuntu-latest` failed because three paths used Windows string literals, which on POSIX resolve to one filename and **silently skipped** the evaluation tests. Fixed; green run not yet observed | **B-08** |
+| ~~Green CI run~~ | **ACHIEVED** — run 37880879892 on `66075b`, all three jobs green. Required fixing a Windows-path bug that had the evaluation tests raising `FileNotFoundError` on Linux | — |
 | Semantic-profile figures | No model weights on this machine | download + time |
 | Greyscale / keyboard / viewport checks | Require a person looking at a screen | Phase 7 manual pass |
 | Evaluation cases for the antonym branch | The 24-case set contains no antonym pair, so a corrected branch stays unmeasured | **R-25** ? 3-4 cases would close it |

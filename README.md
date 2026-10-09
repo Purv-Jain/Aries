@@ -76,7 +76,7 @@ No LangChain. No paid APIs. No GPU requirement. Rationale in
 | `tools/measure.py` | Latency, Recall@k, MRR, RAM, determinism, abstention | measured |
 | `tests/data/eval_cases.jsonl` | The 24 hand-labelled cases; every passage verbatim-checked | measured |
 | `tests/data/metrics.json`, `eval_results.json` | Raw measurement output — the source of every reported number | measured |
-| `.github/workflows/tests.yml` | Offline CI on Python 3.14 | **written, never executed** — no repository (B-08) |
+| `.github/workflows/tests.yml` | Offline CI on Python 3.14, matrix over ubuntu + windows, plus a separate security sweep | **green** — run 37880879892, all three jobs success |
 
 ## What the system does today
 
@@ -195,10 +195,12 @@ nothing depends on colour alone. Full spec in
    `APPROVE PHASE N` instruction.
 7. **"Measured" is not "written".** The semantic-profile tests exist and are deselected by default;
    they have never been run because the weights are absent. They are not passing.
-8. **CI is not yet green.** The `ubuntu-latest` job failed because three paths were built from
-   Windows-style string literals, which resolve to a single filename on POSIX and made the
-   evaluation tests skip silently. Fixed in PR #1, with a guard test. Until a green run is
-   observed, nothing here may be called "CI-verified".
+8. **CI is green, and it took a real fix.** The `ubuntu-latest` job failed because three paths
+   were built from Windows-style string literals. On POSIX a backslash is an ordinary filename
+   character, so the expression resolves to a *single long filename* — the evaluation tests then
+   raised `FileNotFoundError` instead of skipping. Found via PR #1, fixed, and now guarded by a
+   test that fails on any reintroduction. Verified on run 37880879892: ubuntu, windows and the
+   security sweep all pass.
 9. **Report the bad results.** Abstention measured 0.000 (R-24). It is in this README and in the
    evidence tracker for the same reason the good numbers are: a report that shows only favourable
    measurements is not measurable, it is marketing.

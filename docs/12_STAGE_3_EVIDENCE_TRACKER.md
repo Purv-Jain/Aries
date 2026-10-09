@@ -58,7 +58,7 @@ repository.** They are historical report claims and are recorded in
 | Tests | `tests/test_core.py`, `test_retrieval.py`, `test_verification.py`, `test_ui.py`, `test_hardening.py` | Bhavya / Purv | **VERIFIED** | 402 passed, 6 deselected, 0 skipped. All PDF fixtures generated in process; no binary blobs, no network, no absolute paths | - |
 | Test config | `pytest.ini` | Purv | **VERIFIED** | `semantic` marker registered; default `addopts = -m "not semantic"` | NFR-01 |
 | Dependencies | `requirements.txt` | Bhavya | **VERIFIED** | Installed into `.venv` on CPython 3.14.6; 110 packages, no manual intervention | NFR-05 |
-| CI config | `.github/workflows/tests.yml` | Bhavya | **IMPLEMENTED** | Workflow parses and pins the offline profile; a test asserts it exists and disables the hub. **It has never executed** — there is no repository (B-08) | NFR-05 |
+| CI config | `.github/workflows/tests.yml` | Bhavya | **VERIFIED** | Workflow parses and pins the offline profile; a test asserts it exists and disables the hub. **Run 37880879892 on `66075b`: `offline (ubuntu-latest)`, `offline (windows-latest)` and `security-sweep` all `success`** | NFR-05 |
 
 ## 5. Environment evidence
 
@@ -72,7 +72,7 @@ repository.** They are historical report claims and are recorded in
 | RAM | present | **MEASURED** | peak RSS recorded during the measurement run: 191.3 MB |
 | OS build | Windows 11, build 26300 | **MEASURED** | `platform.platform()` in `tests/data/metrics.json` |
 | GPU | none by design (CPU-only) | VERIFIED (by design) | NFR-02 target; no `torch.cuda` reference in `src/` |
-| CI green on a fresh clone | — | **FIXED, not yet re-run** | run 37835567623: `windows-latest` and `security-sweep` passed, `ubuntu-latest` failed. Cause: Windows path literals resolving to one filename on POSIX, silently skipping the `tests/data/` tests. Fixed in PR #1 (B-08) |
+| **CI green on a fresh clone** | — | **VERIFIED** | **run [37880879892](https://github.com/Purv-Jain/Aries/actions/runs/37880879892) on `66075b`: `offline (ubuntu-latest)`, `offline (windows-latest)`, `security-sweep` — all three `success`**. Prior failure (run 37835567623) was a Windows path literal resolving to one filename on POSIX; fixed in PR #1 and `66075b` (B-08) |
 
 ## 6. Automated test evidence
 
@@ -159,7 +159,7 @@ non-detection, mixed results, the claim's own direction, and the negation guard.
 | Security sweep | pass | no `eval`/`exec`/`compile`/`__import__`, no `shell=True`, no secrets, no absolute paths, no `torch.cuda`, no writes in `src/`, fully pinned requirements. Three checks were **wrong on first run** and were corrected, each with a `not_vacuous` companion |
 | Metrics re-run | pass | `tests/data/metrics.json` presence and shape asserted; the numbers themselves are re-measurable via `tools/measure.py` |
 | CLI contract | pass | `TestRunDemoContract` (7 tests) exercises exit codes 0/1/2 and byte-identical `--json` across two runs |
-| CI config | pass | `.github/workflows/tests.yml` exists, parses, and disables the hub. **Never executed** (B-08) |
+| CI config | pass | `.github/workflows/tests.yml` exists, parses, disables the hub — and **runs green**, run 37880879892 (B-08) |
 
 ### 6.5 UI-1: headless startup, run outside pytest as well
 

@@ -16,7 +16,7 @@
 | **G7 blocked on** | **Screenshots S1–S9** (no human at a screen), **B-05** (no repository ⇒ no contribution table, no CI), semantic-profile figures (no weights) |
 | **Tests written** | **405** across `test_core.py` (64), `test_retrieval.py` (80), `test_verification.py` (114), `test_ui.py` (98), `test_hardening.py` (46) |
 | **Commits made** | **2** — `fd2be70` (Phase 7, attributed) and `9772226` (Phases 0–6, **placeholder author**, B-05) |
-| **CI** | **Root cause found and fixed.** `PROJECT_ROOT / r"tests\data\..."` is one filename on POSIX, so every test reading `tests/data/` **skipped silently** on ubuntu. Fixed in PR #1; a guard test now prevents recurrence. Awaiting a green re-run |
+| **CI** | **GREEN.** Run [37880879892](https://github.com/Purv-Jain/Aries/actions/runs/37880879892) on `66075b`: `offline (ubuntu-latest)`, `offline (windows-latest)`, `security-sweep` all **success**. B-08 closed |
 | **Model weights downloaded** | 0 — semantic and abstractive paths written, **unmeasured** |
 | **Calibrated** | `verified_threshold` 0.62 → **0.63**, from a 24-case labelled set; false-`Verified` 0.125 → **0.000** |
 | **Metrics measured** | 13 of 24. 4 explicitly **not measured** (model load, semantic-profile figures, FLAN-T5 marker coverage, semantic determinism) |
@@ -81,7 +81,7 @@
 | 41 | Evaluation harness | [tools/evaluate.py](../tools/evaluate.py) + [tools/build_cases.py](../tools/build_cases.py) | Sweeps `verified_threshold`; rebuilds the set from the fixture; results in [eval_results.json](../tests/data/eval_results.json) |
 | 42 | Measurement harness | [tools/measure.py](../tools/measure.py) | Latency, Recall@k, MRR, RSS, determinism, abstention → [metrics.json](../tests/data/metrics.json) |
 | 43 | Hardening tests | [tests/test_hardening.py](../tests/test_hardening.py) | 46 tests: evaluation integrity, calibration re-run, security sweep, metrics re-run, CLI, CI config |
-| 44 | CI workflow | [.github/workflows/tests.yml](../.github/workflows/tests.yml) | Offline matrix on 3.14. **Written, never executed** (B-08) |
+| 44 | CI workflow | [.github/workflows/tests.yml](../.github/workflows/tests.yml) | Offline matrix on 3.14 plus a separate security sweep. **Green** — run 37880879892 (B-08 closed) |
 | 45 | **Stage 3 report draft** | [docs/16_STAGE_3_REPORT_DRAFT.md](16_STAGE_3_REPORT_DRAFT.md) | 15 sections, drafted from the evidence tracker only. **Not submission-ready** — §15 lists what is missing |
 | 46 | **Reproducible logs** | [logs/README.md](../logs/README.md) | 9 captured command outputs: environment, test run, demo, metrics, sweep, headless UI, 3 abstention cases |
 | 47 | **Stage 3 deviations log** | [docs/01 §3.1](01_REQUIREMENTS.md#31-stage-3-versus-stage-2-deviations-log) | D-11 → D-19, each forced by a measurement |
@@ -143,11 +143,11 @@
 | **B-05** | **The Phase 0-6 commit carries a placeholder author** | Per-member contribution table (report §13, item 7.4) | **PARTLY RESOLVED, disclosure chosen over rewriting history.** A repository now exists at [Purv-Jain/Aries](https://github.com/Purv-Jain/Aries) with two commits. `9772226` (all of Phases 0-6) was authored by the git default placeholder `Your Name <your.email@example.com>`, because the repo was created before the identity was configured; `fd2be70` (Phase 7) is correctly attributed to `Purv-Jain <purv.jain24@sakec.ac.in>`. The placeholder commit **cannot be decomposed** into three contributions, so no per-member split is derivable. Rewriting it was considered and **rejected**: it changes a commit on a public remote, invalidates it for anyone who cloned, and needs both teammates to coordinate. Correct it after submission. | Human |
 | **B-06** | ~~No real academic PDF in the repo~~ | R-11 | **RESOLVED for measurement** — the team's own Stage 2 report (15 pages) was used as the fixture. See **B-07** for the remaining issue | — |
 | **B-07** | **The fixture PDF lives in `~/Downloads/.pdf/`, outside the project** | Reproducing the calibration on a fresh clone | A decision: commit the report under `tests/data/`, or document that `tools/evaluate.py` requires a local copy | Human |
-| **B-08** | ~~`ubuntu-latest` CI job fails~~ | Gate G6 item | **RESOLVED — cause identified and fixed.** `PROJECT_ROOT / r"tests\data\eval_cases.jsonl"` resolves to a *single filename* on POSIX: a backslash is a legal filename character there. Every test reading `tests/data/` therefore **skipped silently** on ubuntu rather than failing, which is why the suite passed on Windows and failed on Linux. PR #1 fixed the three literals in `test_hardening.py`; the identical literal at `tools/build_cases.py:39` was missed and is fixed here, and `TestPathsAreCrossPlatform` now fails on any reintroduction. **A green re-run has not yet been observed** | — |
+| ~~B-08~~ | ~~`ubuntu-latest` CI job fails~~ | Gate G6 item | **RESOLVED AND VERIFIED 2026-10-09.** Cause: `PROJECT_ROOT / r"tests\data\eval_cases.jsonl"` resolves to a *single filename* on POSIX, where a backslash is a legal filename character. The nine `TestEvaluationSetIntegrity` tests called `_load_cases()` with no skip guard, so they raised `FileNotFoundError` instead of skipping — which is why the job failed rather than silently under-reporting. Fixed in PR #1 and in `66075b` (the identical literal in `tools/build_cases.py`). **Verified green**: run [37880879892](https://github.com/Purv-Jain/Aries/actions/runs/37880879892) on `66075b`, all three jobs `success`. `TestPathsAreCrossPlatform` fails on any reintroduction | — |
 
 **B-05 is partly resolved** — the repository exists and Phase 7 is correctly attributed; the
-Phase 0–6 commit keeps its placeholder author by deliberate decision. **B-08 is resolved** — the ubuntu failure was a Windows path literal that silently skipped the
-evaluation tests, found and fixed via PR #1. A green re-run is still unobserved.
+Phase 0–6 commit keeps its placeholder author by deliberate decision. **B-08 is resolved and verified green** — the ubuntu failure was a Windows path literal that made the
+evaluation tests raise `FileNotFoundError`, found and fixed via PR #1. Run 37880879892 is green on all three jobs.
 
 Remaining blockers and what each needs:
 
