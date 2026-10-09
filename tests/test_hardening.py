@@ -32,9 +32,9 @@ from pathlib import Path
 import pytest
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-CASES_PATH = PROJECT_ROOT / r"tests\data\eval_cases.jsonl"
-RESULTS_PATH = PROJECT_ROOT / r"tests\data\eval_results.json"
-METRICS_PATH = PROJECT_ROOT / r"tests\data\metrics.json"
+CASES_PATH = PROJECT_ROOT / "tests" / "data" / "eval_cases.jsonl"
+RESULTS_PATH = PROJECT_ROOT / "tests" / "data" / "eval_results.json"
+METRICS_PATH = PROJECT_ROOT / "tests" / "data" / "metrics.json"
 FIXTURE = Path.home() / "Downloads" / ".pdf" / "FAI_PE_Microproject_Stage_2_Report_Revised.pdf"
 
 needs_fixture = pytest.mark.skipif(
