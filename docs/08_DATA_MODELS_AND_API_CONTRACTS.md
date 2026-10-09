@@ -315,6 +315,50 @@ both backends and a future store with an explicit flush has an obvious place to 
 
 ---
 
+## 7.3 `CoverageReport` and `AbstentionConfig` (Phase 7)
+
+Added with the pre-generation refusal gate, [ADR-0014](05_TECH_STACK_AND_ADRS.md#adr-0014--refuse-before-generating-on-query-coverage-rather-than-a-relevance-floor).
+
+### `CoverageReport`
+
+| Field | Type | Meaning |
+|---|---|---|
+| `covered` | `tuple[str, ...]` | question content words found in the retrieved passages |
+| `missing` | `tuple[str, ...]` | question content words found in none of them |
+| `terms` | `int` (derived) | `len(covered) + len(missing)` |
+| `value` | `float` (derived) | `len(covered) / terms`; **1.0 when `terms == 0`** |
+
+`value == 1.0` with `terms == 0` is the documented "no signal" case, not a measurement of full
+coverage. Callers must test `terms` rather than trusting `value` — `pipeline.ask()` does.
+
+Matching is substring containment of a content word in lowercased passage text, not token equality, so
+`chunk` matches `chunking` (wanted) and `cost` matches `costly` (accepted). Recorded in ADR-0014
+rather than defended.
+
+### `AbstentionConfig`
+
+| Field | Default | Range | Meaning |
+|---|---|---|---|
+| `min_query_coverage` | **0.50** | `[0, 1]` | refuse below this coverage |
+| `coverage_scope` | `"retrieved"` | `"retrieved"` \| `"top"` | pool scored: all retrieved passages, or only rank 1 |
+| `enabled` | `True` | bool | escape hatch; `False` restores pre-gate behaviour |
+
+Construction validates both the range and the scope. `min_query_coverage` out of `[0, 1]` and an
+unknown `coverage_scope` both raise `ValueError`.
+
+### `abstention_reason` values
+
+| Value | Raised by | Meaning |
+|---|---|---|
+| `no_evidence_retrieved` | `ExtractiveGenerator` | the evidence list was empty |
+| `no_sentences_in_evidence` | `ExtractiveGenerator` | retrieved passages held no sentence long enough to quote |
+| `insufficient_query_coverage` | `pipeline.ask()`, via `generator.insufficient_evidence_answer` | retrieved passages do not address the question |
+| `model_declined_to_answer` | `FlanT5Generator` | the abstractive model returned `NOT IN PASSAGES` |
+
+**Contract note.** `GeneratedAnswer.__post_init__` coerces a bare `str` passed as `notes` into a
+one-tuple. `notes=( "a" "b" )` is a *string*, not a tuple, and every consumer iterates or joins it —
+which renders as single letters in the UI rather than as an error.
+
 ## 8. Generation contract
 
 ### 8.1 `GeneratedAnswer`

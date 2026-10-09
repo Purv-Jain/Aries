@@ -27,9 +27,9 @@ Anything else stays empty. An empty `Evidence` cell means the claim cannot go in
 
 | Claim class | Count | Verified today |
 |---|---|---|
-| Automated tests | 17 scenarios + 20 contracts | **405 passing**, 6 deselected, 0 skipped; 17 scenarios + 20 contracts covered, plus 98 UI and 46 hardening tests |
+| Automated tests | 17 scenarios + 20 contracts | **429 passing**, 6 deselected, 0 skipped; 17 scenarios + 20 contracts covered, plus 98 UI and 54 hardening tests |
 | Screenshots | ~10 states | **0** |
-| Evaluation metrics | 24 | **13 measured**, **4 explicitly not measured**, 1 negative finding (abstention, R-24), 1 calibration nuance (lexical paraphrase limit, D-26). §9 |
+| Evaluation metrics | 24 + 48 | **14 measured**, **4 explicitly not measured**, 1 negative finding now **mitigated** (abstention, R-24), 1 calibration nuance (lexical paraphrase limit, D-26). §9 |
 | Commits attributable to a named student | 2 | **1 of 2.** `fd2be70` is attributed; `9772226` (all of Phases 0–6) carries the git default placeholder author and cannot be decomposed (B-05) |
 | Architectural decisions documented | 13 ADRs | **13** (1 Accepted, 12 Proposed) |
 
@@ -217,7 +217,7 @@ Both figures are recorded so the change of method is visible rather than buried.
 | EC-13 missing model dep | `test_ec13_missing_dependency_degrades_and_still_answers` | **VERIFIED** | pass - degraded=True, reason recorded, markers still emitted |
 | EC-14 multi-document citations | `TestMultiDocument` (3), `test_ec14_each_document_keeps_its_own_page_numbers`, `test_ec09_valid_marker_resolves_to_the_right_file_and_page` | **VERIFIED** | pass — distinct source IDs, chunk IDs and per-document page ranges, and a marker resolving to the correct file *and* page |
 | EC-15 repeat index + persistence | `test_ec15_reindexing_the_same_file_does_not_duplicate`, `test_ec15_chunk_ids_are_stable_across_a_reindex`, `test_chroma_index_survives_a_new_pipeline_instance`, `test_restart_does_not_re_read_the_pdf` | **VERIFIED** | pass — re-index is idempotent, IDs stable, and a restarted pipeline answers from the persisted index with `load_document` replaced by a raiser |
-| EC-16 insufficient evidence | `TestAbstention` (7 tests) | **VERIFIED** | pass — an empty index returns an abstained `AnswerResponse`, never an exception. **Separate finding (R-24):** the abstention *path* is correct but the extractive generator's trigger is not, so a non-empty index of irrelevant passages does not abstain. Measured 0.000 abstention on 3 unanswerable questions |
+| EC-16 insufficient evidence | `TestAbstention` (7), `TestInsufficientEvidenceAbstains` (11), `TestAbstentionGateIsCalibrated` (10) | **VERIFIED** | pass — an empty index returns an abstained `AnswerResponse`, never an exception. **Extended in Phase 7:** a second path now refuses *insufficient* evidence on a non-empty index, before generation. Measured on the 48-case labelled set: correct abstention **0.750** (18/24), false abstention **0.000** (0/24), **0** false-`Verified` claims on the 10 questions that previously produced 15. The 6 adversarial misses are recorded as an open limit. See [R-24](14_RISK_REGISTER.md) |
 | EC-17 offline, no API key | run 12 in §6.1; `test_ec17_two_offline_runs_are_byte_identical` | **VERIFIED** | pass — the full index→ask→verify loop runs with `socket.connect` replaced by a function that raises; two runs compared string-for-string |
 
 ### 6.3 Contract tests
@@ -320,8 +320,11 @@ Definitions in [10_EVALUATION_METRICS.md](10_EVALUATION_METRICS.md). **Do not es
 | Verified recall | **0.800** (8/10) | same | **MEASURED** |
 | Verified F1 | **0.889** | same | **MEASURED** |
 | **False-`Verified` rate** | **0.000** | same — down from **0.125** at the previous 0.62 threshold | **MEASURED** |
-| Abstention rate | **0.000** | 3 deliberately unanswerable questions; mean support 0.59 across 9 claims | **MEASURED — a bad result.** R-24 |
-| False-abstention rate | 0.000 (9 answerable) | same run | **MEASURED** |
+| **Correct abstention rate** | **0.750** (18/24) | 48-case labelled set, `tests/data/abstention_cases.jsonl` | **MEASURED** — up from **0.000**. R-24 mitigated |
+|  └─ of which adversarial | **0.000** (0/6) | same | **MEASURED** — the gate's stated limit |
+| False-abstention rate | **0.000** (0/24 answerable) | same | **MEASURED** |
+| False-`Verified` on clear out-of-corpus questions | **0** | the original 10 questions, gate on vs off | **MEASURED** — was **15** |
+| `min_query_coverage` | **0.50** | swept 0.00→1.00; see [10 §4b](10_EVALUATION_METRICS.md#4b-abstention-calibration--the-sweep-behind-min_query_coverage) | **MEASURED** |
 | Fabrications on abstention | **0** | no `unresolvable_reference` on an abstained response | **MEASURED** |
 | Inter-annotator agreement | **0.958** (23/24) | hand-labelled set; the one disagreement recorded with its reconciliation | **MEASURED** |
 | Chosen thresholds | `verified` 0.63, `review` 0.315 | swept 0.30→0.90; highest F1 with false-`Verified` = 0. See §7.4 of the tracker | **MEASURED** |

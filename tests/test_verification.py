@@ -32,6 +32,7 @@ from src.generator import (
 )
 from src.models import (
     VERIFICATION_LABELS,
+    AbstentionConfig,
     AnswerResponse,
     Claim,
     CitationRef,
@@ -42,7 +43,7 @@ from src.models import (
     RetrievalResult,
     VerificationConfig,
 )
-from src.pipeline import ResearchPipeline, summarise
+from src.pipeline import ResearchPipeline, query_coverage, summarise
 from src.verifier import (
     ANTONYM_CONCEPTS,
     ANTONYM_OPPOSITIONS,
@@ -964,6 +965,194 @@ class TestOfflineEndToEnd:
         response = pipeline.ask("quantum chromodynamics lattice gauge theory", top_k=3)
         assert isinstance(response, AnswerResponse)
         assert response.summary is not None
+
+
+# --------------------------------------------------------------------------
+# R-24 / FR-33: refusing weak evidence before generating
+# --------------------------------------------------------------------------
+
+
+class TestInsufficientEvidenceAbstains:
+    """The gate that closed R-24, on a *non-empty* index.
+
+    The empty-index path (EC-16) always worked. This is the other case: an index full of
+    passages, none of which address the question. Before this gate existed the pipeline
+    retrieved five passages anyway, the extractive generator picked the
+    least-irrelevant sentence it could find, and the verifier labelled it. On ten
+    out-of-corpus questions that produced 15 claims labelled `Verified` -- about
+    photosynthesis, the 1994 Nobel Prize in Literature and the formula for table salt.
+    """
+
+    OUT_OF_CORPUS = "What is the boiling point of mercury at sea level?"
+
+    def test_an_out_of_corpus_question_is_refused_not_answered(
+        self, evidence_pdf: Path
+    ) -> None:
+        pipeline = ResearchPipeline()
+        pipeline.index([evidence_pdf])
+        response = pipeline.ask(self.OUT_OF_CORPUS, top_k=5)
+
+        assert response.answer.abstained is True
+        assert response.answer.abstention_reason == "insufficient_query_coverage"
+        assert response.answer.text == ""
+        assert response.answer.claims == ()
+
+    def test_an_answerable_question_is_still_answered(self, evidence_pdf: Path) -> None:
+        pipeline = ResearchPipeline()
+        pipeline.index([evidence_pdf])
+        response = pipeline.ask("What does Chroma persist?", top_k=5)
+
+        assert response.answer.abstained is False
+        assert response.answer.claims
+        assert response.verifications
+
+    def test_the_refusal_names_the_terms_that_did_not_match(self, evidence_pdf: Path) -> None:
+        """A refusal the user cannot check is a refusal they have to trust."""
+        pipeline = ResearchPipeline()
+        pipeline.index([evidence_pdf])
+        response = pipeline.ask(self.OUT_OF_CORPUS, top_k=5)
+
+        notes = " ".join(response.answer.notes)
+        assert "mercury" in notes.lower()
+        assert "coverage" in notes.lower()
+
+    def test_nothing_is_verified_when_the_gate_fires(self, evidence_pdf: Path) -> None:
+        """The harm this gate exists to remove: confident labels on a non-answer."""
+        pipeline = ResearchPipeline()
+        pipeline.index([evidence_pdf])
+        response = pipeline.ask(self.OUT_OF_CORPUS, top_k=5)
+
+        assert response.verifications == ()
+        assert response.summary.abstained is True
+        assert response.summary.worst_support is None
+
+    def test_the_generator_is_never_called_when_the_gate_fires(
+        self, evidence_pdf: Path
+    ) -> None:
+        """Before generation, not after. A claim built only to be labelled is the defect."""
+        pipeline = ResearchPipeline()
+        pipeline.index([evidence_pdf])
+        calls: list[str] = []
+        real = pipeline._generator.generate
+
+        def spy(question: str, evidence: object, max_sentences: int = 5) -> object:
+            calls.append(question)
+            return real(question, evidence, max_sentences)  # type: ignore[arg-type]
+
+        pipeline._generator.generate = spy  # type: ignore[method-assign]
+        response = pipeline.ask(self.OUT_OF_CORPUS, top_k=5)
+
+        assert response.answer.abstained is True
+        assert calls == [], "the generator ran even though the evidence was refused"
+
+    def test_the_refused_passages_are_still_returned_for_inspection(
+        self, evidence_pdf: Path
+    ) -> None:
+        """The user is shown what was considered, so 'nothing matched' is checkable."""
+        pipeline = ResearchPipeline()
+        pipeline.index([evidence_pdf])
+        response = pipeline.ask(self.OUT_OF_CORPUS, top_k=5)
+
+        assert response.retrieved, "an abstention must still say what it looked at"
+
+    def test_a_question_with_no_content_terms_is_not_refused(
+        self, evidence_pdf: Path
+    ) -> None:
+        """No signal is not evidence of absence.
+
+        "What should I do here?" is entirely stopwords, so coverage has nothing to measure.
+        Refusing there would be a guess wearing a measurement's clothes -- and it would
+        silently disable the injection tests, which need an answer to inspect.
+        """
+        pipeline = ResearchPipeline()
+        pipeline.index([evidence_pdf])
+        response = pipeline.ask("What should I do here?", top_k=5)
+
+        assert response.answer.abstained is False
+        assert response.answer.claims
+
+    def test_the_gate_is_deterministic(self, evidence_pdf: Path) -> None:
+        payloads = []
+        for _ in range(3):
+            pipeline = ResearchPipeline()
+            pipeline.index([evidence_pdf])
+            payload = pipeline.ask(self.OUT_OF_CORPUS, top_k=5).answer
+            payloads.append((payload.text, payload.abstained, payload.abstention_reason, payload.notes))
+        assert payloads[0] == payloads[1] == payloads[2]
+
+    def test_disabling_the_gate_restores_the_old_behaviour(
+        self, evidence_pdf: Path
+    ) -> None:
+        """Proves the refusal comes from the gate, and gives an escape hatch."""
+        pipeline = ResearchPipeline(PipelineConfig(abstention=AbstentionConfig(enabled=False)))
+        pipeline.index([evidence_pdf])
+        response = pipeline.ask(self.OUT_OF_CORPUS, top_k=5)
+
+        assert response.answer.abstained is False
+        assert response.answer.claims
+
+    def test_an_out_of_range_floor_is_refused_at_construction(self) -> None:
+        """A threshold nobody can set is not a configurable threshold."""
+        with pytest.raises(ValueError, match="min_query_coverage"):
+            AbstentionConfig(min_query_coverage=1.01)
+        with pytest.raises(ValueError, match="coverage_scope"):
+            AbstentionConfig(coverage_scope="everything")
+
+    def test_the_floor_is_configuration_and_not_a_literal_in_the_pipeline(self) -> None:
+        """AGENTS.md: a threshold buried in a scoring function cannot be calibrated or argued about."""
+        source = (Path(__file__).resolve().parent.parent / "src" / "pipeline.py").read_text("utf-8")
+        gate = source[source.index("if abstention.enabled:") : source.index("generate_ms=(time.perf_counter()")]
+        assert "0.5" not in gate, "a coverage floor is hardcoded inside the gate"
+        assert AbstentionConfig().min_query_coverage == 0.50
+
+
+class TestQueryCoverageSignal:
+    """The signal itself, isolated from the pipeline that consumes it."""
+
+    def _result(self, text: str, rank: int = 1) -> RetrievalResult:
+        chunk = EvidenceChunk(
+            chunk_id=f"chk_{rank}",
+            source_id="doc_x",
+            filename="x.pdf",
+            page_number=rank,
+            chunk_index_in_page=0,
+            text=text,
+        )
+        return RetrievalResult(rank=rank, chunk=chunk, relevance_score=0.5, backend="tfidf")
+
+    def test_coverage_counts_question_terms_present_in_the_passages(self) -> None:
+        results = [self._result("Chroma persists embeddings on the local filesystem.")]
+        report = query_coverage("What does Chroma persist?", results)
+
+        assert "chroma" in report.covered
+        assert "persist" in report.covered
+        assert report.missing == ()
+        assert report.value == 1.0
+
+    def test_unmatched_terms_are_named(self) -> None:
+        results = [self._result("Chroma persists embeddings on the local filesystem.")]
+        report = query_coverage("What is the boiling point of mercury?", results)
+
+        assert "boiling" in report.missing
+        assert "mercury" in report.missing
+        assert report.covered == ()
+
+    def test_a_question_with_no_content_terms_reports_no_terms(self) -> None:
+        report = query_coverage("What should I do here?", [self._result("anything")])
+        assert report.terms == 0
+        assert report.value == 1.0
+
+    def test_top_scope_ignores_lower_ranked_passages(self) -> None:
+        results = [
+            self._result("Chroma persists embeddings.", rank=1),
+            self._result("The boiling point of mercury is high.", rank=2),
+        ]
+        assert query_coverage("boiling point mercury", results, "retrieved").value > 0.0
+        assert query_coverage("boiling point mercury", results, "top").value == 0.0
+
+    def test_an_unknown_scope_is_refused_rather_than_guessed(self) -> None:
+        with pytest.raises(ValueError, match="unknown coverage scope"):
+            query_coverage("anything", [self._result("text")], "everything")
 
 
 # --------------------------------------------------------------------------

@@ -350,3 +350,45 @@ of an individual's work".
 **Why.** Reproducing someone else's unverified numbers into a submitted report is the exact
 behaviour this project exists to criticise. We would be doing to our own examiner what LLMs do to
 students.
+---
+
+## ADR-0014 — Refuse before generating, on query coverage rather than a relevance floor
+
+**Status:** Accepted
+
+**Context.** FR-33 requires explicit abstention when evidence is absent **or insufficient**, and the
+architecture originally implemented only the first: an empty index abstains, a non-empty index always
+produces an answer. Measured consequence (R-24): on 10 out-of-corpus questions the system emitted 50
+claims, **15 of them labelled `Verified`** — about photosynthesis, the 1994 Nobel Prize in
+Literature and the formula for table salt. The verifier was behaving correctly; it was verifying an
+answer that should never have been built.
+
+The obvious fix is a floor on `relevance_score`. It was implemented as a sweep before anything was
+shipped, and it **does not work**: on 48 labelled questions the answerable and unanswerable top-1
+cosine ranges overlap (0.138–0.257 against 0.072–0.192), so every floor that catches most
+unanswerable questions also kills at least five of eight answerable ones. TF-IDF cosine over shared
+academic prose is dominated by vocabulary both classes contain.
+
+**Decision.**
+
+1. A pre-generation gate refuses when the fraction of the question's **content words** present in the
+   retrieved passages falls below `AbstentionConfig.min_query_coverage` (default **0.50**, swept on
+   labelled data). Coverage separates the classes where cosine does not: answerable minimum 0.667,
+   clear unanswerable maximum 0.250.
+2. The gate runs **before** the generator, so a refusal produces no claims at all. Verification is
+   unchanged and still runs on every claim of every real answer.
+3. A question with no content terms after stopword removal is **not** refused. Absence of signal is
+   not evidence of absence.
+4. The threshold is configuration, in the spirit of ADR-0012, and the published sweep includes the
+   operating point that scores better on the labelled set (0.65) and was still rejected for having a
+   0.017 margin to the nearest answerable case.
+5. The refusal names the query terms that failed to match, and the retrieved passages are still
+   returned, so the user can check the refusal instead of trusting it.
+
+**Consequence, accepted knowingly.** The gate is lexical. Six adversarial labelled cases — whose
+vocabulary overlaps the corpus while the answer does not exist — are still answered confidently.
+They stay in the labelled set so the measured 0.750 cannot be improved by deleting them, and closing
+the gap requires entailment rather than a better threshold. This is a **new** precision-first trade
+in the same direction as ADR-0007: the system refuses rather than quotes something irrelevant.
+
+---

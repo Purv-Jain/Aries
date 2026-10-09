@@ -103,6 +103,10 @@ sequenceDiagram
     alt no results
         P-->>UI: AnswerResponse(abstained=True)
     else results
+        P->>P: query_coverage(question, retrieved)
+        alt coverage < min_query_coverage
+            P-->>UI: AnswerResponse(abstained=True, reason=insufficient_query_coverage)
+        else sufficient
         P->>G: generate(question, evidence)
         G->>G: attach [S1, p.y] markers from real retrieved data only
         G-->>P: GeneratedAnswer(text, claims)
@@ -115,8 +119,47 @@ sequenceDiagram
         end
         V-->>P: list[ClaimVerification]
         P-->>UI: AnswerResponse(answer, retrievals, verifications, metrics)
+        end
     end
 ```
+
+### 4b. The refusal gate, and why it is not a relevance threshold
+
+The gate sits between retrieval and generation. Its signal is **coverage**: the fraction of the
+question's content words (stopwords removed, via the same `content_tokens` the verifier uses) that
+appear in the retrieved passages.
+
+It is **not** a floor on `relevance_score`, and that was a measured decision rather than a preference.
+On the 48 labelled questions in
+[tests/data/abstention_cases.jsonl](../tests/data/abstention_cases.jsonl) the two classes overlap on
+cosine:
+
+| Signal | answerable range | unanswerable range | separable |
+|---|---|---|---|
+| top-1 `relevance_score` | 0.138 – 0.257 | 0.072 – 0.192 | **no** |
+| coverage by retrieved set | 0.667 – 1.000 | 0.000 – 0.250 (clear) | **yes** |
+
+TF-IDF cosine over shared academic prose is dominated by vocabulary both classes contain, so it
+measures register more than relevance. A floor at 0.18 on cosine catches 8 of 10 unanswerable
+questions and simultaneously kills 5 of 8 answerable ones. Coverage asks the question the gate needs
+answered — *are the distinctive words of this question present in what we retrieved*.
+
+Three properties are deliberate:
+
+1. **Before generation, not after.** A claim built only to be labelled `Unsupported` is still a claim
+   the user was shown. This is what R-24 was.
+2. **A question with no content terms is not refused.** `content_tokens` drops stopwords, so "What
+   should I do here?" yields nothing to measure. Absence of signal is not evidence of absence, and
+   refusing there would be a guess wearing a measurement's clothes.
+3. **The floor is configuration**, `AbstentionConfig.min_query_coverage`, calibrated on labelled data
+   and swept in [10 §4b](10_EVALUATION_METRICS.md#4b-abstention-calibration--the-sweep-behind-min_query_coverage).
+   It is not tuned to any single question, and the sweep is published including the operating point
+   that scores better and was still rejected.
+
+**What it cannot do.** Coverage cannot tell "the words are here" from "the answer is here". Six
+labelled questions exploit exactly that ("What is the inference throughput of MiniLM on this laptop?")
+and are answered confidently. They remain in the labelled set, so the measured 0.750 cannot be
+improved by deleting them.
 
 ## 5. Citation verification design
 

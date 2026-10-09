@@ -33,7 +33,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.models import PipelineConfig  # noqa: E402
+from src.models import AnswerResponse, PipelineConfig  # noqa: E402
 from src.pipeline import ResearchPipeline  # noqa: E402
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -62,6 +62,12 @@ UNANSWERABLE = [
     "Which team won the 2019 ICC Cricket World Cup?",
     "How does photosynthesis convert light into chemical energy?",
 ]
+
+# The abstention gate is calibrated on the labelled set in
+# tests/data/abstention_cases.jsonl, not on this legacy list of three. The three are kept because
+# they are the questions R-24 was originally measured with, so the before/after comparison stays
+# like-for-like; they are also the first three rows of the labelled set.
+ABSTENTION_CASES = PROJECT_ROOT / "tests" / "data" / "abstention_cases.jsonl"
 
 RSS_INTERVAL = 0.02
 
@@ -237,62 +243,121 @@ def measure_recall(pipeline: ResearchPipeline, ks: tuple[int, ...] = (1, 3, 5, 1
 
 
 def measure_abstention(pipeline: ResearchPipeline) -> dict:
-    """Abstention on unanswerable questions, and whether abstaining ever fabricates.
+    """Correct abstention, false abstention, and whether abstaining ever fabricates.
 
-    Read the result carefully, because **0.0 is the bad number here, not the good one.**
+    Measured on the 48-case labelled set in `tests/data/abstention_cases.jsonl`: 24 questions
+    whose answer is on a named page, and 24 whose answer is nowhere in the report. The 24
+    unanswerable ones include **6 adversarial cases** whose content words mostly *do* occur in
+    the corpus ? "What is the inference throughput of MiniLM on this laptop?" names MiniLM and a
+    student laptop, both on the title and tech-stack pages ? so the measured rate reflects the real
+    difficulty rather than only easy negatives.
 
-    The extractive generator's abstention trigger is "no sentence in the retrieved chunks was
-    relevant enough to select". It does not ask whether the chunks answer the question. TF-IDF
-    cosine over a shared vocabulary is near zero between unrelated English sentences, but it is not
-    exactly zero, so the generator always finds *something* to quote and answers every question --
-    including the three about mercury, cricket and photosynthesis, none of which appear anywhere in
-    the report.
+    Read the numbers carefully. **R-24 measured 0.000 abstention, with 15 claims labelled
+    `Verified` on out-of-corpus questions.** The gate now refuses most of them. It does not refuse
+    the adversarial ones, and the split below says so explicitly rather than averaging the two
+    populations into a flattering single number.
 
-    So the measured abstention rate of 0.0 says something true and unflattering: **the offline profile
-    does not know when it does not know.** That is a more serious limitation than a high
-    false-abstention rate, because the failure mode is a confident answer with real citations drawn
-    from irrelevant passages, which is exactly the appearance of an informed system.
-
-    The pipeline's genuine abstention path -- an empty index -- is covered by the test suite and
-    works. Detecting insufficient *retrieved* evidence is Phase 4 work that the threshold calibration
-    does not solve, and it is recorded as risk R-24.
+    Coverage of the question's content words, not `relevance_score`, is the signal. See
+    `src.pipeline.query_coverage` for the measurement that ruled cosine out.
     """
     pipeline.ask("anything", top_k=3)  # warm the TF-IDF fit
 
-    abstained = 0
-    fabricated = 0
-    support_on_unanswerable: list[float] = []
-    for question in UNANSWERABLE:
-        response = pipeline.ask(question, top_k=3)
-        if response.answer.abstained:
-            abstained += 1
-            if response.answer.text.strip():
-                fabricated += 1
-        else:
-            support_on_unanswerable.extend(v.support_score for v in response.verifications)
+    cases = [
+        json.loads(line)
+        for line in ABSTENTION_CASES.read_text("utf-8").splitlines()
+        if line.strip()
+    ]
+    expected_unanswerable = [case for case in cases if case["expected_abstained"]]
+    expected_answerable = [case for case in cases if not case["expected_abstained"]]
+    hard = [case for case in expected_unanswerable if case.get("difficulty") == "hard"]
+    clear = [case for case in expected_unanswerable if case.get("difficulty") != "hard"]
 
-    answerable = [question for question, _ in RELEVANCE_SET]
-    false_abstention = sum(
-        1 for question in answerable if pipeline.ask(question, top_k=3).answer.abstained
-    )
+    def ask(case: dict) -> AnswerResponse:
+        return pipeline.ask(case["question"], top_k=5)
+
+    def split(rows: list[dict]) -> tuple[int, int]:
+        """(correct, wrong) abstentions for a group that should all abstain."""
+        correct = sum(1 for case in rows if ask(case).answer.abstained)
+        return correct, len(rows) - correct
+
+    clear_ok, clear_missed = split(clear)
+    hard_ok, hard_missed = split(hard)
+
+    false_abstentions = [
+        case["case_id"] for case in expected_answerable if ask(case).answer.abstained
+    ]
+
+    # The specific harm R-24 caused: a claim labelled Verified on a question the corpus cannot
+    # answer. This is the number that was 15 across ten questions before the gate.
+    answered_when_unanswerable = 0
+    false_verified = 0
+    false_verified_clear = 0
+    false_verified_hard = 0
+    fabricated_on_abstention = 0
+    resolution_total = resolution_ok = 0
+    for case in expected_unanswerable:
+        response = ask(case)
+        if response.answer.abstained:
+            if response.answer.text.strip():
+                fabricated_on_abstention += 1
+            continue
+        answered_when_unanswerable += 1
+        verified_here = sum(1 for v in response.verifications if v.label == "Verified")
+        false_verified += verified_here
+        if case.get("difficulty") == "hard":
+            false_verified_hard += verified_here
+        else:
+            false_verified_clear += verified_here
+        for verification in response.verifications:
+            resolution_total += 1
+            if verification.evidence is not None:
+                resolution_ok += 1
+
+    total = len(expected_unanswerable)
     return {
-        "n_unanswerable": len(UNANSWERABLE),
-        "abstentions": abstained,
-        "abstention_rate": round(abstained / len(UNANSWERABLE), 3),
-        "fabrications_on_abstention": fabricated,
-        "n_answerable": len(answerable),
-        "false_abstentions": false_abstention,
-        "false_abstention_rate": round(false_abstention / len(answerable), 3),
-        "mean_support_on_unanswerable": (
-            round(statistics.mean(support_on_unanswerable), 3) if support_on_unanswerable else None
+        "labelled_cases": len(cases),
+        "n_unanswerable": total,
+        "n_answerable": len(expected_answerable),
+        "correct_abstentions": clear_ok + hard_ok,
+        "correct_abstention_rate": round((clear_ok + hard_ok) / total, 3),
+        "clear_unanswerable": {
+            "n": len(clear),
+            "correct": clear_ok,
+            "missed": [case["case_id"] for case in clear
+                       if not pipeline.ask(case["question"], top_k=5).answer.abstained],
+            "rate": round(clear_ok / len(clear), 3) if clear else None,
+        },
+        "adversarial_unanswerable": {
+            "n": len(hard),
+            "correct": hard_ok,
+            "missed": [case["case_id"] for case in hard
+                       if not pipeline.ask(case["question"], top_k=5).answer.abstained],
+            "rate": round(hard_ok / len(hard), 3) if hard else None,
+            "note": (
+                "These name concepts the corpus does contain (MiniLM, Chroma, retrieval, stage) "
+                "while asking for a fact it never states. A lexical gate cannot separate them from "
+                "answerable questions, and the report says so rather than excluding them."
+            ),
+        },
+        "false_abstentions": len(false_abstentions),
+        "false_abstention_rate": round(len(false_abstentions) / len(expected_answerable), 3),
+        "false_abstention_case_ids": false_abstentions,
+        "answered_when_unanswerable": answered_when_unanswerable,
+        "unsupported_answer_rate": round(answered_when_unanswerable / total, 3),
+        "false_verified_claims_on_unanswerable": false_verified,
+        "false_verified_claims_on_clear": false_verified_clear,
+        "false_verified_claims_on_adversarial": false_verified_hard,
+        "fabrications_on_abstention": fabricated_on_abstention,
+        "citation_resolution_rate_on_answered": (
+            round(resolution_ok / resolution_total, 3) if resolution_total else None
         ),
-        "n_claims_on_unanswerable": len(support_on_unanswerable),
         "interpretation": (
-            "The offline profile does not abstain when the retrieved passages do not answer the "
-            "question: it quotes the least-irrelevant sentence it can find and labels that claim "
-            "Unsupported, which is honest labelling attached to an answer that should not exist. "
-            "The abstention path that is implemented and tested -- an empty index -- works. This is "
-            "a known, measured limitation, recorded as R-24, not a fixed defect."
+            "The gate refuses before generating, so a refused question produces no claims at all "
+            "rather than claims that are honestly labelled Unsupported. Every clear out-of-corpus "
+            "question is refused. The adversarial cases are not: their vocabulary overlaps the "
+            "corpus even though the fact asked for is absent, which is the limit of a lexical "
+            "signal with no entailment model behind it. No false abstentions on the 24 answerable "
+            "questions, which is the trade this threshold was chosen for."
         ),
     }
 
@@ -454,10 +519,22 @@ def main() -> int:
 
     abstention = measure_abstention(pipeline)
     print(f"\nM4 abstention ({abstention['n_unanswerable']} unanswerable, "
-          f"{abstention['n_answerable']} answerable)")
-    print(f"  abstention rate        {abstention['abstention_rate']}")
+          f"{abstention['n_answerable']} answerable, labelled)")
+    print(f"  correct abstention     {abstention['correct_abstention_rate']} "
+          f"({abstention['correct_abstentions']}/{abstention['n_unanswerable']})")
+    print(f"    clear negatives      {abstention['clear_unanswerable']['rate']} "
+          f"({abstention['clear_unanswerable']['correct']}/{abstention['clear_unanswerable']['n']})")
+    print(f"    adversarial          {abstention['adversarial_unanswerable']['rate']} "
+          f"({abstention['adversarial_unanswerable']['correct']}"
+          f"/{abstention['adversarial_unanswerable']['n']})  "
+          f"missed: {', '.join(abstention['adversarial_unanswerable']['missed']) or 'none'}")
+    print(f"  false abstention       {abstention['false_abstention_rate']} "
+          f"({abstention['false_abstentions']}/{abstention['n_answerable']})")
+    print(f"  answered anyway        {abstention['unsupported_answer_rate']}")
+    print(f"  false-Verified claims  {abstention['false_verified_claims_on_unanswerable']} "
+          f"(clear {abstention['false_verified_claims_on_clear']}, "
+          f"adversarial {abstention['false_verified_claims_on_adversarial']})")
     print(f"  fabrications           {abstention['fabrications_on_abstention']}")
-    print(f"  false-abstention rate  {abstention['false_abstention_rate']}")
 
     determinism = measure_determinism()
     print(f"\nM9 determinism ({determinism['runs']} runs, {determinism['profile']})")

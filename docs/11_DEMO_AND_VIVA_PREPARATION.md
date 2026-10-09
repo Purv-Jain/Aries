@@ -60,32 +60,38 @@ Walk through in this order:
 
 **This is the beat that matters.** Pause here.
 
-### Beat 4 — Show what it catches, and be honest about what it does not (120 s)
+### Beat 4 — Show the refusal, and be honest about its edge (120 s)
 
-> **Changed in Phase 7.** This beat previously promised that asking about an absent topic would
-> produce an abstention. **It does not.** The measured abstention rate is 0.000
-> ([R-24](14_RISK_REGISTER.md)); asking about mercury's boiling point returns five sentences with
-> real citations to irrelevant passages. Running the old beat live would have been a failure in
-> front of the examiner. Rehearse this version instead.
+> **Changed twice in Phase 7.** This beat originally promised an abstention the system did not
+> perform, was corrected to *demonstrate the failure*, and is now correct again because the failure
+> was fixed ([R-24](14_RISK_REGISTER.md)). Ask about mercury's boiling point: the system refuses,
+> names the query terms that failed to match, and shows the passages it considered.
 
 | # | Action | Expected | Why it lands |
 |---|---|---|---|
 | 1 | Ask a question the documents **do** answer | claims with `[Sx, p.y]`, per-claim labels | the working case |
 | 2 | Show a claim the source contradicts | `Unsupported` with `contradiction_detected` | it caught a polarity error |
 | 3 | Show a deliberately broken marker `[S7, p.1]` | `Unsupported`, `unresolvable_reference` | a citation pointing nowhere is caught |
-| 4 | **Ask about an absent topic, then say what happened** | it answers, from irrelevant passages | honesty, demonstrated not claimed |
-| 5 | Remove all documents, ask again | *"No passages match…"* — abstention **does** work on an empty index | the limit is precise, not vague |
+| 4 | **Ask about mercury's boiling point** | it **refuses**, naming `boiling`, `mercury`, `point`, `sea` as unmatched | the failure mode is now closed, on screen |
+| 5 | Ask *"What is the inference throughput of MiniLM on this laptop?"* | **it answers** — and that is correct to disclose | shows the gate's real limit, volunteered |
 
 On step 4:
 
-> "It just answered a question that isn't in these papers — with genuine citations to sentences that
-> don't answer it. That's the real failure mode, and we measured it at 0.000. The abstention path
-> works; you can see it in step 5. What's missing is a relevance floor on the retrieved set, so
-> nothing ever gets below the threshold. It's logged as R-24."
+> "It refused, and it told me *why*: none of `boiling`, `mercury`, `point` or `sea` appears in any
+> passage it retrieved. That check runs before the generator, so no claim is built and then labelled
+> ‘unsupported’ afterwards. It refuses 18 of 24 out-of-corpus questions with no false refusals on 24
+> answerable ones, and the threshold came from a sweep over 48 hand-labelled questions."
 
-Beat 4 is worth more than three successful answers, because a system that always says "yes" is
-exactly the problem we are solving — and knowing precisely *when* this one still does is what makes
-the rest of the demonstration credible.
+On step 5 — **say this before they find it**:
+
+> "This one it gets wrong. MiniLM and 'laptop' both appear in the report, so the vocabulary matches,
+> but the report never states a throughput. A lexical check cannot tell 'the words are here' from
+> 'the answer is here'. Those six cases are in our labelled set precisely so we cannot quote a
+> better number by leaving them out. Closing that gap needs entailment, not a better threshold."
+
+Beat 4 is worth more than three successful answers. Volunteering the case your system still gets
+wrong, with the reason it is the wrong shape of fix, is the difference between a demo and a
+defence.
 
 ### Beat 5 — Show the offline guarantee (60 s)
 
@@ -113,7 +119,7 @@ Ending on the limitation makes everything before it more credible.
 
 - [ ] Fixture PDF staged, and a **second** PDF for the multi-document case
 - [ ] Internet **off** for the offline-profile beats
-- [ ] A known-absent question memorised, **and the R-24 explanation memorised with it** — it will not abstain
+- [ ] Two questions memorised: one clearly absent (**it will refuse** — mercury's boiling point) and one adversarial (**it will answer, wrongly** — MiniLM throughput). Rehearsing only the first is how you get caught
 - [ ] A known-contradiction case memorised
 - [ ] Screenshots of every state, each labelled *captured* with its timestamp — **none exist yet (7.2)**
 - [ ] `logs/02_test_suite_offline.txt` open in a tab, in case "how do you know?" comes early
@@ -167,8 +173,8 @@ Ending on the limitation makes everything before it more credible.
 | Admitting a low score to look modest | Feels safer | Report it accurately with the reason |
 | **Presenting the 0.958 "agreement" as two independent labellers** | It reads as a rigorous inter-annotator study | It was a self-reconciliation by the same agent that wrote the verifier. Say so; it costs nothing and is checkable |
 | **Quoting precision 1.000 as "the system never makes a mistake"** | 1.000 is the number examiners remember | It is 1.000 on 24 self-authored cases. The honest sentence: "on this labelled set, at this threshold" |
-| **Defending abstention as a limitation that only affects edge cases** | Sounds like hedging | "The measured abstention rate is 0.000. It does not work on a non-empty index. Here are the three logs." |
-| Claiming CI is green | It would sound rigorous | It has never run; there is no repository |
+| **Quoting 0.750 as "it knows when it doesn't know"** | The number sounds finished | "0.750 correct on 48 hand-labelled questions, 0.000 false. It was 0.000 before Phase 7. Six adversarial cases still get confident answers, and here they are." |
+| Claiming CI is green without the run ID | It would sound rigorous | It is green — run 37880879892, all three jobs. Say the number; it is checkable. |
 | Claiming the UI was visually verified | 98 UI tests sound like coverage | They prove the render path executes, not that a layout is readable |
 
 ### 4.5 The three questions Phase 6 made newly answerable
@@ -190,10 +196,23 @@ the 24 cases went 0.292 → 0.625 → 0.667. Both are regression-tested now. Say
 and demonstrates the evaluation was worth running.
 
 **"What is the system's worst failure?"**
-Abstention, measured: 0.000. Given three questions absent from the corpus, it answered all three
-with real citations to irrelevant passages (`logs/07`–`09`). The abstention path works on an empty
-index; the generator's relevance trigger does not. The fix is a relevance floor on the retrieved
-set, which we did not attempt. Naming this first is more defensible than being asked.
+Answer the *current* one, then volunteer the one you fixed, because both are true and only the
+second is impressive if you volunteer it.
+
+**Worst failure, now:** adversarial abstention misses. Ask "What is the inference throughput of
+MiniLM on this laptop?" — MiniLM and laptop are both in the report, so coverage passes, and the system
+answers with a confident citation to a passage that never states a throughput. Six of 24 labelled
+unanswerable questions are like this; we measure **0.750** correct abstention overall, 1.000 on
+clearly-out-of-domain questions and **0.000** on these. A lexical pre-generation check cannot tell
+"the words are here" from "the answer is here". Closing it needs entailment, not a better threshold.
+
+**Worst failure, found and fixed:** abstention did not work at all. It measured **0.000**, and across
+10 out-of-corpus questions it emitted 50 claims of which **15 were labelled `Verified`** — about
+photosynthesis and the northern lights. The generator's only trigger asked "is any sentence relevant
+enough?" and never "do these passages answer the question?". We first tried the obvious fix, a floor
+on the cosine relevance score, **measured that it cannot work** (answerable 0.138–0.257 overlaps
+unanswerable 0.072–0.192), and switched to coverage of the question's content words, swept over 48
+hand-labelled questions. Naming the rejected fix is the part that lands.
 
 ### 4.4 Demonstrable technical understanding
 

@@ -35,11 +35,16 @@ from src.embeddings import (
     TfidfEmbeddingBackend,
     build_embedding_backend,
 )
-from src.generator import AnswerGenerator, build_generator
+from src.generator import (
+    AnswerGenerator,
+    build_generator,
+    insufficient_evidence_answer,
+)
 from src.models import (
     USER_MESSAGES,
     AnswerResponse,
     ClaimVerification,
+    CoverageReport,
     DocumentPage,
     DocumentSummary,
     GeneratedAnswer,
@@ -55,9 +60,54 @@ from src.models import (
 )
 from src.pdf_ingestion import PDFIngestionError, load_document
 from src.vector_store import VectorStore, build_vector_store
-from src.verifier import Verifier
+from src.verifier import Verifier, content_tokens
 
-__all__ = ["ResearchPipeline", "PipelineConfig", "summarise"]
+__all__ = ["ResearchPipeline", "PipelineConfig", "summarise", "query_coverage"]
+
+
+def query_coverage(
+    question: str,
+    retrieved: Sequence[RetrievalResult],
+    scope: str = "retrieved",
+) -> CoverageReport:
+    """Which of the question's content words the retrieved passages actually contain.
+
+    **This replaced a threshold on `relevance_score`, and that is the finding, not a
+    preference.** On the 48 labelled cases in
+    [tests/data/abstention_cases.jsonl](../tests/data/abstention_cases.jsonl) the two
+    classes overlap on cosine: answerable top-1 scores run 0.14-0.26 and unanswerable
+    ones 0.07-0.19. A floor at 0.18 catches 8 of 10 unanswerable questions and
+    simultaneously kills 5 of 8 answerable ones. There is no clean cut, because TF-IDF
+    cosine over shared academic prose is dominated by vocabulary both classes have, so it
+    measures *register* more than *relevance*.
+
+    Coverage asks the question the gate actually needs answered: are the distinctive
+    words of this question present in what we retrieved. Answerable coverage bottoms out
+    at 0.667 and unanswerable coverage tops out at 0.250, which leaves a real gap to
+    place a threshold in.
+
+    **Matching is substring containment, not token equality.** `content_tokens` drops
+    stopwords and short tokens from the question, but the haystack is lowercased text and
+    searched with `in`. That makes `chunk` match `chunking`, which is wanted, at the cost
+    of `cost` matching `costly`. Documented rather than defended: the alternative is a
+    stemmer, and a stemmer is more machinery than this gap justifies.
+
+    Returns `covered` and `missing` so the refusal can name them. A gate that reports only
+    a score asks the user to trust a number they cannot inspect.
+    """
+    terms = content_tokens(question)
+    if not terms:
+        return CoverageReport(covered=(), missing=())
+    if scope == "top":
+        pool = retrieved[:1]
+    elif scope == "retrieved":
+        pool = retrieved
+    else:
+        raise ValueError(f"unknown coverage scope: {scope!r}; expected 'retrieved' or 'top'")
+    haystack = " ".join(result.chunk.text for result in pool).lower()
+    covered = tuple(sorted(term for term in terms if term in haystack))
+    missing = tuple(sorted(term for term in terms if term not in haystack))
+    return CoverageReport(covered=covered, missing=missing)
 
 
 def summarise(
@@ -407,9 +457,12 @@ class ResearchPipeline:
         1. **Refuse a blank question before anything else** (EC-05), rather than explaining away an
            empty result afterwards.
         2. **Retrieve.** An empty index abstains here instead of producing a confident-looking answer.
-        3. **Generate from the retrieved set only.** The generator's signature gives it no access to
+        3. **Refuse weakly-matched evidence before generating** (FR-33, R-24). A non-empty index
+           returning five unrelated passages is not an answer, and building one only to label it
+           `Unsupported` afterwards is the failure this step removes.
+        4. **Generate from the retrieved set only.** The generator's signature gives it no access to
            the corpus, so it cannot quote something that was not retrieved.
-        4. **Verify.** Every claim gets a label, a reason code and an explanation.
+        5. **Verify.** Every claim gets a label, a reason code and an explanation.
 
         Returns an `AnswerResponse` for every user-facing case including abstention, so the UI has one
         code path. Genuine programmer errors -- a blank question, a non-positive `top_k` -- still
@@ -455,6 +508,35 @@ class ResearchPipeline:
         clock = time.perf_counter()
         retrieved = tuple(self._store.query(query_vector, effective_top_k))
         retrieve_ms = (time.perf_counter() - clock) * 1000
+
+        # 3. **Refuse weak evidence before generating, not after.** The empty-index case
+        #    above is a count gate. This is the quality gate, and it exists because
+        #    measurement showed the count gate was the only one: with a non-empty index
+        #    the extractive generator was quoting the least-irrelevant sentence it could
+        #    find for questions about photosynthesis and the northern lights, and the
+        #    verifier was then honestly labelling those claims. Checking here means a claim
+        #    is never manufactured only to be labelled afterwards (R-24, FR-33).
+        abstention = self._config.abstention
+        if abstention.enabled:
+            coverage = query_coverage(question, retrieved, abstention.coverage_scope)
+            # A question with no content terms left after stopword removal carries no
+            # signal either way, and `coverage.value` is 1.0 for it. Abstaining there
+            # would be a guess dressed as a measurement, so the gate stays shut.
+            if coverage.terms and coverage.value < abstention.min_query_coverage:
+                clock = time.perf_counter()
+                answer = insufficient_evidence_answer(coverage, abstention.min_query_coverage)
+                return self._response(
+                    question,
+                    answer,
+                    retrieved,
+                    (),
+                    started,
+                    embed_ms=embed_ms,
+                    retrieve_ms=retrieve_ms,
+                    generate_ms=(time.perf_counter() - clock) * 1000,
+                    verify_ms=0.0,
+                    warnings=warnings,
+                )
 
         clock = time.perf_counter()
         evidence = [result.chunk for result in retrieved]

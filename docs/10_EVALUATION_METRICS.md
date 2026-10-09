@@ -80,6 +80,71 @@ fabricated_marker_rate = unresolvable_markers / total_markers_emitted
 The target is that this is **0 in the default extractive profile**, because the generator can only
 emit markers for retrieved chunks. If it is not zero, something is broken.
 
+## 4b. Abstention calibration — the sweep behind `min_query_coverage`
+
+Run on the 48 labelled questions in
+[tests/data/abstention_cases.jsonl](../tests/data/abstention_cases.jsonl), scored by
+`tools/measure.py` against the real 15-page report. 24 answerable (each naming the page that
+answers it) and 24 unanswerable, of which **6 are adversarial**.
+
+**Why the labelled set contains adversarial cases.** The easy negatives — the boiling point of
+mercury, the 2019 Cricket World Cup — are out of *domain*, and a gate that detects "wrong domain"
+looks far better than one that detects "the answer is not in this corpus". Six cases ask for a fact
+the report never states while using vocabulary it does contain:
+
+| Case | Question | Terms present | Coverage |
+|---|---|---|---|
+| `unans_19` | What is the inference throughput of MiniLM on this laptop? | MiniLM, laptop | 0.750 |
+| `unans_20` | How much does the Chroma database cost per month? | Chroma, cost | 0.833 |
+| `unans_21` | What recall did retrieval achieve on the Stage 1 report? | retrieval, stage, report | 0.800 |
+| `unans_22` | How many evaluation queries were labelled by the two labellers? | evaluation, queries, labelled | 0.500 |
+| `unans_23` | What learning rate was used to train the MiniLM embedding model? | MiniLM, embedding, model | 0.714 |
+| `unans_24` | Which GPU was used for the reproducible validation run? | validation | 0.800 |
+
+All six are answered by the system. That is the honest ceiling of a lexical gate and it is
+reported as such rather than excluded from the denominator.
+
+### The sweep
+
+`floor` is the coverage below which the pipeline refuses. 24 unanswerable and 24 answerable.
+
+| floor | correct abstention | false abstention | TP | FN | FP | TN |
+|---|---|---|---|---|---|---|
+| 0.05 | 0.375 | 0.000 | 9 | 15 | 0 | 24 |
+| 0.25 | 0.583 | 0.000 | 14 | 10 | 0 | 24 |
+| 0.30 | 0.667 | 0.000 | 16 | 8 | 0 | 24 |
+| 0.40–0.55 | 0.750 | **0.000** | 18 | 6 | 0 | 24 |
+| **0.50 (shipped)** | **0.750** | **0.000** | **18** | **6** | **0** | **24** |
+| 0.65 | 0.792 | 0.000 | 19 | 5 | 0 | 24 |
+| 0.70 | 0.792 | 0.042 | 19 | 5 | 1 | 23 |
+| 0.85 | 1.000 | 0.208 | 24 | 0 | 5 | 19 |
+| 1.00 | 1.000 | 0.292 | 24 | 0 | 7 | 17 |
+
+### Why 0.50 and not 0.65
+
+**0.65 dominates 0.50 on the table** — higher correct abstention at the same 0.000 false
+abstention — and it was still rejected. Its margin to the nearest answerable case is **0.017**:
+`ans_19` ("What does the report say about OCR for scanned PDFs?") measures exactly 0.667, so one
+re-phrasing of one question, or one chunk-boundary change, would push a legitimate question under
+the floor. At 0.50 the margin is **0.167** on the answerable side and **0.250** on the unanswerable
+side.
+
+Choosing 0.65 would be fitting the threshold to the dataset that justifies it, which is precisely
+what this project's own evidence rules exist to prevent. The mid-gap of the two bounds is 0.458,
+and 0.50 is that value rounded to something a person would type.
+
+**Read these as 24 self-authored cases from one 15-page report.** They justify this operating point.
+They do not establish it as correct in general — the same caveat that applies to the 24-case
+verification set and to [R-10](14_RISK_REGISTER.md).
+
+### What the gate does not do
+
+It is a lexical, pre-generation check on question vocabulary. It does not reason about whether a
+passage *entails* an answer, it cannot see a fact that is stated in completely different words, and
+it cannot catch the adversarial six. It also deliberately stays shut when a question contains no
+content words after stopword removal, because absence of signal is not evidence of absence — see
+`src.pipeline.query_coverage`.
+
 ## 5. M3 — Claim-support precision / recall / F1
 
 **Question:** does the `Verified` / `Needs Review` / `Unsupported` labelling agree with human
@@ -155,6 +220,19 @@ The last row is a hard invariant, not a target: if the system answers when it ha
 Include deliberately unanswerable questions — about a document not in the collection, and about a
 topic absent from it. A system that never abstains looks broken to any examiner who asks one
 off-script question.
+
+**Two kinds, and the second is the one that matters.** Out-of-*domain* questions (mercury, cricket)
+are easy for any lexical check. Questions whose vocabulary overlaps the corpus while the answer does
+not exist (MiniLM throughput, Chroma pricing) are the real test, and they are the six
+`unans_19`–`unans_24` rows in [4b](#4b-abstention-calibration--the-sweep-behind-min_query_coverage).
+An abstention rate measured only on out-of-domain questions describes a system that detects
+*subject matter*, not a system that detects *absence of evidence*, and those are not the same claim.
+
+**Implementation note.** `tools/evaluate.py` scores the *verifier* directly against each case's own
+cited passage and never calls `pipeline.ask()`, so the abstention gate is **not** in its path. The
+gate is measured by `tools/measure.py` and locked by `TestAbstentionGateIsCalibrated` in
+`tests/test_hardening.py`. The 24-case verification set and the 48-case abstention set measure
+different components and are not substitutes for each other.
 
 ## 7. M5–M8 — Performance
 
@@ -283,8 +361,13 @@ full JSON is in [tests/data/metrics.json](../tests/data/metrics.json) and
 | Verified-class recall | **0.800** (8/10) | same | **MEASURED** |
 | Verified-class F1 | **0.889** | same | **MEASURED** |
 | **False-`Verified` rate** | **0.000** | same — **down from 0.125** at the previous 0.62 threshold | **MEASURED** |
-| Abstention rate (unanswerable) | **0.000** | 3 questions absent from the corpus; mean support 0.59 | **MEASURED — and it is a bad result. R-24** |
-| False-abstention rate | 0.000 (0/9) | same run | **MEASURED** |
+| **Correct abstention rate** (unanswerable) | **0.750** (18/24) | 48-case labelled set, `tests/data/abstention_cases.jsonl` | **MEASURED** — up from **0.000**. See [R-24](14_RISK_REGISTER.md) |
+|  └─ clear negatives | **1.000** (18/18) | same | **MEASURED** |
+|  └─ adversarial negatives | **0.000** (0/6) | same | **MEASURED — the gate's limit, not a defect to hide** |
+| **False-abstention rate** (answerable) | **0.000** (0/24) | same | **MEASURED** — up from 0/9 questions; the set grew |
+| Unsupported answer rate on unanswerable | 0.250 (6/24) | same | **MEASURED** — the adversarial six |
+| False-`Verified` claims on clear out-of-corpus questions | **0** | the 10 questions from the original failure, gate on vs off | **MEASURED** — was **15** |
+| `min_query_coverage` floor | **0.50** | swept 0.00→1.00 on the labelled set; see § below | **MEASURED** |
 | Fabrications on abstention | **0** | no `unresolvable_reference` on any response | **MEASURED** |
 | Inter-annotator agreement | **0.958** (23/24) | **nominal — see the caveat below** | **MEASURED, weakly** |
 | Chosen `verified_threshold` | **0.63** | swept 0.30→0.90; highest-F1 point with false-`Verified` = 0 | **MEASURED** |

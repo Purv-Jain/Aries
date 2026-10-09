@@ -2,7 +2,7 @@
 
 **Status:** Phase 7 in progress — built, tested, calibrated, measured, and the Stage 3 report drafted.
 **Current gate:** `PHASE 7 ACTIVE — GATE G7 NOT YET PASSED`
-**Tests:** `pytest -q` → **405 passed, 6 deselected**, 0 failures (2026-10-08)
+**Tests:** `pytest -q` → **429 passed, 6 deselected**, 0 failures (2026-10-09)
 **Run it:** `streamlit run app.py`
 **Last updated:** 2026-10-08
 
@@ -124,12 +124,18 @@ determinism **5/5** byte-identical runs. Latency and RSS vary a little between r
 figures are in [logs/04_measure.txt](logs/04_measure.txt), and the recall, MRR and calibration
 results reproduce exactly.
 
-**The abstention test failed.** Asked about mercury's boiling point, the 2019 Cricket World Cup and
-photosynthesis — none of them in the corpus — the offline profile answered all three, citing the
-least-irrelevant sentence it could find, at mean support 0.59. The abstention path itself is
-correct; the generator's trigger is not. Tracked as **R-24**, and it is reported here rather than
-buried because a system that cites irrelevant passages confidently is the exact failure this project
-claims to detect.
+**The abstention test failed, and the failure was fixed rather than written down.** Asked about
+mercury's boiling point, the 2019 Cricket World Cup and photosynthesis — none of them in the corpus —
+the offline profile answered all three, citing the least-irrelevant sentence it could find, at mean
+support 0.59 (**R-24**). A coverage gate now runs *before* generation, on a threshold calibrated
+against 48 hand-labelled questions: **correct abstention 0.750 (18/24 unanswerable), false
+abstention 0.000 (0/24 answerable)**, and the 10 questions from that original failure now produce
+**0** `Verified` claims instead of 15.
+
+The remaining 6 misses are adversarial questions whose vocabulary overlaps the corpus while the fact
+asked for is absent — “What is the inference throughput of MiniLM on this laptop?” names MiniLM and
+a student laptop, both in the report. A lexical gate cannot catch those. They are in the labelled
+set precisely so the headline rate cannot be flattered by leaving them out.
 
 Full results, with method and caveat for each: [docs/10 §11](docs/10_EVALUATION_METRICS.md#11-results-table--measured-in-phase-6)
 and [docs/12 §9](docs/12_STAGE_3_EVIDENCE_TRACKER.md#9-metric-evidence).
@@ -201,9 +207,11 @@ nothing depends on colour alone. Full spec in
    raised `FileNotFoundError` instead of skipping. Found via PR #1, fixed, and now guarded by a
    test that fails on any reintroduction. Verified on run 37880879892: ubuntu, windows and the
    security sweep all pass.
-9. **Report the bad results.** Abstention measured 0.000 (R-24). It is in this README and in the
-   evidence tracker for the same reason the good numbers are: a report that shows only favourable
-   measurements is not measurable, it is marketing.
+9. **Report the bad results, and fix them when they are fixable.** Abstention measured 0.000 (R-24).
+   It is now 0.750 correct with 0.000 false, and the six adversarial misses are named in
+   [docs/10_EVALUATION_METRICS.md](docs/10_EVALUATION_METRICS.md). The 0.000 is still in the
+   evidence tracker as the before number, for the same reason the good numbers are: a report that
+   shows only favourable measurements is not measurable, it is marketing.
 
 ## Quick reference
 
@@ -211,11 +219,11 @@ nothing depends on colour alone. Full spec in
 python -m venv .venv
 .venv\Scripts\activate                      # Windows
 pip install -r requirements.txt             # verified working on CPython 3.14.6
-pytest -q                                   # 405 passed, 6 deselected as of 2026-10-08
+pytest -q                                   # 429 passed, 6 deselected as of 2026-10-09
 pytest -q -m semantic                       # needs MiniLM + FLAN-T5 weights; never run yet
 streamlit run app.py                        # the application
 python run_demo.py --pdf <path>             # CLI: index -> ask -> verify, exit 0/1/2
-python tools/evaluate.py                    # score the labelled set, sweep the threshold
+python tools/evaluate.py --sweep            # score the labelled set AND sweep the threshold
 python tools/measure.py --pdf <path>        # latency, Recall@k, RAM, determinism, abstention
 ```
 
@@ -224,7 +232,7 @@ python tools/measure.py --pdf <path>        # latency, Recall@k, RAM, determinis
 repository** (B-07). Without it they skip rather than fail.
 
 Use the pinned interpreter. `C:\Python314\python.exe` happens to have most of the stack, but the
-**verified** environment is `.venv`, and that is where all 405 passing tests were observed.
+**verified** environment is `.venv`, and that is where all 429 passing tests were observed.
 
 ## Licence and attribution
 

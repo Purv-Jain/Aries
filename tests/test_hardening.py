@@ -37,6 +37,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 # silently skipped these tests on ubuntu rather than failing them, which is why the ubuntu CI job
 # failed while the suite passed everywhere else. Fixed in PR #1.
 CASES_PATH = PROJECT_ROOT / "tests" / "data" / "eval_cases.jsonl"
+ABSTENTION_CASES_PATH = PROJECT_ROOT / "tests" / "data" / "abstention_cases.jsonl"
 RESULTS_PATH = PROJECT_ROOT / "tests" / "data" / "eval_results.json"
 METRICS_PATH = PROJECT_ROOT / "tests" / "data" / "metrics.json"
 FIXTURE = Path.home() / "Downloads" / ".pdf" / "FAI_PE_Microproject_Stage_2_Report_Revised.pdf"
@@ -218,6 +219,118 @@ class TestCalibrationIsReproducible:
         assert rerun["default"]["accuracy"] == stored["default"]["accuracy"]
         assert rerun["default"]["false_verified_rate"] == stored["default"]["false_verified_rate"]
         assert rerun["case_count"] == stored["case_count"]
+
+class TestAbstentionGateIsCalibrated:
+    """The coverage floor is a measured operating point, re-derived on every suite run.
+
+    R-24 was a measured 0.000 abstention rate. These tests exist so the number cannot
+    quietly go back, and so a later edit to `min_query_coverage` has to argue with 48
+    labelled cases rather than with nobody.
+    """
+
+    @needs_fixture
+    def test_the_labelled_set_is_balanced_and_not_trivial(self) -> None:
+        """A calibration set of three questions on one side proves nothing."""
+        cases = self._cases()
+        answerable = [case for case in cases if not case["expected_abstained"]]
+        unanswerable = [case for case in cases if case["expected_abstained"]]
+        assert len(answerable) >= 12
+        assert len(unanswerable) >= 12
+        # Every answerable case must name the page that answers it, or the label is a guess.
+        assert all(case["answering_page"] for case in answerable)
+        assert len({case["answering_page"] for case in answerable}) >= 8
+        # The hard negatives are the point of the set; without them the rate is flattering.
+        assert sum(1 for case in unanswerable if case.get("difficulty") == "hard") >= 4
+        assert len({case["question"] for case in cases}) == len(cases)
+
+    @needs_fixture
+    def test_the_correct_abstention_rate_holds_at_the_shipped_floor(self) -> None:
+        measured = self._measure()
+        assert measured["correct_abstention_rate"] >= 0.70, (
+            f"R-24 regression: correct abstention fell to "
+            f"{measured['correct_abstention_rate']}"
+        )
+        assert measured["clear_unanswerable"]["rate"] == 1.0, (
+            "a clear out-of-corpus question is no longer refused: "
+            f"{measured['clear_unanswerable']['missed']}"
+        )
+
+    @needs_fixture
+    def test_no_answerable_question_is_refused(self) -> None:
+        """The other half of the trade. A gate that refuses everything is not a gate."""
+        measured = self._measure()
+        assert measured["false_abstention_rate"] == 0.0, (
+            f"false abstentions on answerable questions: {measured['false_abstention_case_ids']}"
+        )
+
+    @needs_fixture
+    def test_no_claim_is_verified_on_a_clear_out_of_corpus_question(self) -> None:
+        """The specific harm R-24 caused: 15 `Verified` claims on out-of-corpus questions.
+
+        Scoped to the *clear* negatives on purpose. The six adversarial cases are answered by
+        design, and their claims do reach `Verified` -- that is the measured limit of a lexical
+        gate, not something to assert away. Asserting zero across all 24 would either fail
+        honestly or force someone to delete the hard cases from the set.
+        """
+        measured = self._measure()
+        assert measured["false_verified_claims_on_clear"] == 0
+
+    @needs_fixture
+    def test_refusing_never_fabricates_an_answer(self) -> None:
+        measured = self._measure()
+        assert measured["fabrications_on_abstention"] == 0
+
+    @needs_fixture
+    def test_the_adversarial_misses_are_recorded_rather_than_hidden(self) -> None:
+        """The gate cannot catch these. The suite says which ones, so the limit stays visible.
+
+        Asserting the misses are *exactly* this list would make the test fail the day the
+        gate improves. It asserts they are a subset, and that the reported rate is not
+        being presented as 1.000.
+        """
+        measured = self._measure()
+        adversarial = measured["adversarial_unanswerable"]
+        assert adversarial["n"] >= 4
+        assert adversarial["rate"] < 1.0, (
+            "if every adversarial case is now caught, update the docs and this assertion "
+            "together -- do not let the improvement pass unnoticed"
+        )
+
+    def test_the_adversarial_misses_are_exactly_the_six_hard_cases(self) -> None:
+        """No fixture needed: the hard cases are declared in the data, not measured here."""
+        cases = self._cases()
+        hard = [case["case_id"] for case in cases if case.get("difficulty") == "hard"]
+        assert hard == [
+            "unans_19", "unans_20", "unans_21", "unans_22", "unans_23", "unans_24",
+        ]
+
+    def test_the_shipped_floor_sits_inside_the_measured_gap(self) -> None:
+        """The floor is a compromise between two measured bounds, not a round number."""
+        from src.models import AbstentionConfig
+
+        floor = AbstentionConfig().min_query_coverage
+        assert floor == 0.50
+        # Answerable coverage bottoms out at 0.667 and clear unanswerable tops out at 0.250.
+        assert 0.250 < floor < 0.667
+
+    # -- helpers -------------------------------------------------------------
+
+    @staticmethod
+    def _cases() -> list[dict]:
+        return [
+            json.loads(line)
+            for line in ABSTENTION_CASES_PATH.read_text("utf-8").splitlines()
+            if line.strip()
+        ]
+
+    def _measure(self) -> dict:
+        from src.pipeline import ResearchPipeline
+        from tools.measure import measure_abstention
+
+        pipeline = ResearchPipeline()
+        pipeline.index([FIXTURE])
+        return measure_abstention(pipeline)
+
 
     def test_the_configured_threshold_is_the_calibrated_one(self) -> None:
         """The shipped default must be the measured operating point, not the inherited guess."""

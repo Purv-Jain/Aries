@@ -14,7 +14,7 @@
 | **Phase complete** | Phases 0–6: research, documentation, foundation, retrieval, verification, UI, testing + hardening |
 | **Phase in progress** | **7** (Stage 3 readiness) — report **drafted** at [16_STAGE_3_REPORT_DRAFT.md](16_STAGE_3_REPORT_DRAFT.md), logs captured in [logs/](../logs/README.md) |
 | **G7 blocked on** | **Screenshots S1–S9** (no human at a screen), **B-05** (no repository ⇒ no contribution table, no CI), semantic-profile figures (no weights) |
-| **Tests written** | **405** across `test_core.py` (64), `test_retrieval.py` (80), `test_verification.py` (114), `test_ui.py` (98), `test_hardening.py` (46) |
+| **Tests written** | **429** across `test_core.py` (64), `test_retrieval.py` (80), `test_verification.py` (130), `test_ui.py` (98), `test_hardening.py` (57) |
 | **Commits made** | **2** — `fd2be70` (Phase 7, attributed) and `9772226` (Phases 0–6, **placeholder author**, B-05) |
 | **CI** | **GREEN.** Run [37880879892](https://github.com/Purv-Jain/Aries/actions/runs/37880879892) on `66075b`: `offline (ubuntu-latest)`, `offline (windows-latest)`, `security-sweep` all **success**. B-08 closed |
 | **Model weights downloaded** | 0 — semantic and abstractive paths written, **unmeasured** |
@@ -31,7 +31,7 @@
 | 3 | Retrieval | **DONE** | Purv | G3 **passed** | `pytest -q` → 144 passed; see §7 |
 | 4 | Generation + verification | **DONE** | Rishabh / Purv | G4 **passed** | `pytest -q` → 227 passed; see §7 |
 | 5 | Premium UI | **DONE** | Purv | G5 **passed**, 3 manual items pending | `pytest -q` → 325 passed; headless HTTP 200; see §7 |
-| 6 | Testing + hardening | **DONE** | Bhavya | G6 **passed**, CI cannot run | `pytest -q` → 405 passed; see §7 |
+| 6 | Testing + hardening | **DONE** | Bhavya | G6 **passed**, CI green | `pytest -q` → 429 passed; see §7 |
 | 7 | Stage 3 readiness | **IN PROGRESS** | All | G7 **not passed** — 4 of 8 scope items done, 3 blocked | [16_STAGE_3_REPORT_DRAFT.md](16_STAGE_3_REPORT_DRAFT.md), [logs/](../logs/README.md) |
 
 ## 3. Completed outputs
@@ -198,7 +198,7 @@ rather than filtered — a suppressed warning hides the next real one too.
 
 > Stage 2 reported "10/10 passing tests" against a prior local prototype not present in this
 > workspace ([ADR-0013](05_TECH_STACK_AND_ADRS.md#adr-0013--treat-stage-2-prototype-claims-as-unverified)).
-> That is a historical report claim. The current number is **405**, and it is 405 because these are
+> That is a historical report claim. The current number is **429**, and it is 429 because these are
 > this project's own tests.
 
 ---
@@ -458,6 +458,83 @@ detection across inflections, polysemy, mixed results and the negation guard. On
 executable claim rather than leaving it in a comment.
 ---
 
+## 7.5 Abstention — R-24 found, measured, and fixed
+
+**Phase 7, 2026-10-09.** This is the one open risk that was closed rather than documented.
+
+### What was wrong
+
+`pipeline.ask()` had one abstention trigger: the index was empty. With a non-empty index, retrieval
+always returned `top_k` passages and the extractive generator always found *something* to quote,
+because its sentence scorer has no floor. The verifier was then asked to check claims built from
+passages that had nothing to do with the question.
+
+Audited before any change: **8 of 8 out-of-corpus questions answered, 15 claims labelled `Verified`.**
+
+### What was rejected first
+
+A floor on the existing `relevance_score`. Measured on the labelled set:
+
+| floor | correct abstention | false abstention |
+|---|---|---|
+| 0.12 | 0.30 | 0.00 |
+| 0.18 | 0.80 | **0.62** |
+| 0.20 | 1.00 | **0.75** |
+
+The two classes overlap on cosine (answerable 0.138–0.257, unanswerable 0.072–0.192). There is no
+clean cut, and it was not shipped.
+
+### What was built
+
+`src/pipeline.py:query_coverage` — the fraction of the question's content words present in the
+retrieved passages — gated in `ask()` **after retrieval, before generation**, with the floor in
+`AbstentionConfig.min_query_coverage` ([ADR-0014](05_TECH_STACK_AND_ADRS.md#adr-0014--refuse-before-generating-on-query-coverage-rather-than-a-relevance-floor)).
+The refusal names the unmatched terms; the retrieved passages are still returned so the user can
+check it.
+
+Labelled set: [tests/data/abstention_cases.jsonl](../tests/data/abstention_cases.jsonl) — 24
+answerable (each naming the page that answers it, 12 distinct pages) and 24 unanswerable, of which
+**6 are adversarial**. Authored by reading the report, not by watching retrieval.
+
+### Measured, on the same 15-page report
+
+| Metric | Before | After |
+|---|---|---|
+| Correct abstention (24 unanswerable) | **0.000** | **0.750** (18/24) |
+|  clear out-of-domain negatives | 0.000 | **1.000** (18/18) |
+|  adversarial negatives | 0.000 | **0.000** (0/6) |
+| False abstention (24 answerable) | 0.000 | **0.000** (0/24) |
+| False-`Verified` on the original 10 questions | **15** | **0** |
+| Claims emitted on those 10 questions | 50 | **0** |
+| Claims on the 8 answerable questions (gate off vs on) | 40 | 40 — **unchanged** |
+
+### Threshold choice, including the one that scored better
+
+Floor **0.50**. The sweep gives 0.65 a *higher* correct-abstention rate (0.792) at the same 0.000
+false-abstention rate, so it dominates 0.50 on the table. **Rejected anyway:** its margin to the
+nearest answerable case is 0.017 against 0.167 at 0.50. Choosing it would be fitting the threshold to
+the dataset that justifies it. Full table in
+[10 §4b](10_EVALUATION_METRICS.md#4b-abstention-calibration--the-sweep-behind-min_query_coverage).
+
+### What is still open
+
+The 6 adversarial cases. Coverage cannot tell "the words are here" from "the answer is here", and
+their claims still reach `Verified`. They are locked into the labelled set by
+`test_the_adversarial_misses_are_recorded_rather_than_hidden`, which **fails if the rate ever
+reaches 1.000** so an improvement cannot pass unnoticed. Closing the gap needs entailment (P3), not a
+better threshold.
+
+### Also fixed along the way
+
+`GeneratedAnswer.notes` accepted a bare `str` where a tuple was declared. `notes=( "a" "b" )` is a
+string, so it iterated character by character and rendered as single letters in the UI. Now coerced
+in `__post_init__`, and the cause is recorded in [08 §7.3](08_DATA_MODELS_AND_API_CONTRACTS.md).
+
+**Tests added: 24** — 16 in `test_verification.py` (gate behaviour, the refusal text, the
+pre-generation ordering, the no-content-terms decision, determinism, and the coverage signal in
+isolation) and 8 in `test_hardening.py` (set quality, and four assertions locking the measured rates
+against the real fixture). No existing test was weakened, skipped or deleted.
+
 ## 8. Measurements taken
 
 ### 8.1 Phase 6 — on the real Stage 2 report
@@ -586,7 +663,13 @@ beside the real ones would flatter the system.
 
 ### Carry these forward, because they are what the report must not hide
 
-- **R-24 ? abstention rate 0.000.** Measured, disclosed in the report abstract and limitations, and captured in three logs. The demo script was rewritten because it promised a behaviour the system does not have.
+- **R-24 — MITIGATED, not closed.** Was 0.000; now **0.750** correct abstention with **0.000** false, after a
+  gate that refuses *before* generation (§7.5). The **6 adversarial cases still get confident answers** and
+  stay in the labelled set so the headline number cannot be improved by deleting them. Closing that needs
+  entailment, not a better threshold.
+- **B-05 — partially resolved.** A repository exists and CI is green; `9772226` still carries the placeholder
+  author, so §13 of the report stays a disclosure rather than a per-member split.
+- **B-08 — closed.** CI green, run 37880879892 on `66075b`, all three jobs success.
 - **R-23 ? the UI has not been seen.** 98 automated tests prove the render path executes. That is not the same as a readable layout.
 - **The calibration rests on 24 self-authored, self-labelled cases.** It justifies 0.63; it does not prove it. The recorded 0.958 "agreement" is a self-reconciliation, not independent labellers, and is described that way everywhere it appears.
 - **The 6 `semantic` tests have never run.** If the team can reach Hugging Face, run them once and record the result ? pass or fail.
@@ -603,7 +686,7 @@ For the next agent session, in order:
 4. Read [06 §8](06_IMPLEMENTATION_ROADMAP.md#8-phase-7--stage-3-readiness) for scope and
    [12_STAGE_3_EVIDENCE_TRACKER.md](12_STAGE_3_EVIDENCE_TRACKER.md) — the report is drafted *from*
    that document, never from memory.
-5. Run tests with `.venv\Scripts\pytest.exe -q`. The pinned environment is where the 405 passing
+5. Run tests with `.venv\Scripts\pytest.exe -q`. The pinned environment is where the 429 passing
    tests were observed.
 6. `tools/evaluate.py` and `tools/measure.py` need the Stage 2 report at
    `~/Downloads/.pdf/FAI_PE_Microproject_Stage_2_Report_Revised.pdf`. Without it they skip, and
@@ -628,6 +711,7 @@ The equivalents that matter now live in the project:
 | Start the app headless | `streamlit run app.py --server.headless true` |
 
 ## 11. Change log
+| 2026-10-09 | 7 | **R-24 closed: evidence-based abstention.** Audit first, code second. Rejected a floor on `relevance_score` after measuring that answerable and unanswerable cosine ranges overlap (any floor catching most unanswerable questions killed ≥5 of 8 answerable). Shipped `query_coverage` instead — fraction of the question's content words present in the retrieved passages — gated in `ask()` **before generation**, floor `0.50` in `AbstentionConfig`, swept 0.00→1.00 on a new 48-case labelled set (24 answerable naming their page, 24 unanswerable incl. **6 adversarial**). Measured: correct abstention **0.000 → 0.750**, false abstention **0.000**, false-`Verified` on the original 10 questions **15 → 0**, claims emitted on them **50 → 0**, answerable claims **unchanged**. Also: `GeneratedAnswer.notes` silently accepted a bare `str` (UI rendered single letters) — now coerced. **429 passed, 6 deselected.** ADR-0014 added; 14 docs updated; 24 tests added, none weakened |
 
 | Date | Phase | Change |
 |---|---|---|

@@ -27,9 +27,11 @@ argument. Retrieval reached **Recall@1 0.667** and **Recall@3 1.000** on 9 hand-
 The offline profile answered in a median of **12.40 ms** (p95 15.55 ms) at **191.3 MB** peak RSS and
 returned byte-identical output across five runs, with no network access and no model download.
 
-Two results are reported because they are unflattering. The system's **abstention rate is 0.000**:
-given three questions entirely absent from the corpus, it answered all three with genuine citations
-to irrelevant passages — a failure that looks like competence. And the evaluation set is
+Two results are reported because they are unflattering. The system originally **did not abstain
+out of corpus at all** — a measured 0.000, producing 15 claims labelled `Verified` on questions about
+photosynthesis and the northern lights. That failure was found, measured, and then fixed: a gate now
+runs before generation and refuses **0.750** of unanswerable questions with **0.000** false
+abstentions, though **6 adversarial cases still get confident answers**. And the evaluation set is
 **self-authored and self-labelled by the team that wrote the verifier**, so these figures justify an
 operating point rather than establish generalisation. Both are stated as limitations in §12 rather
 than buried.
@@ -198,16 +200,16 @@ support score and retrieval relevance as **separately labelled rows**.
 
 ## 10. Testing
 
-**405 tests, 405 passed, 0 failed, 0 skipped, 0 xfailed.** Captured output:
+**429 tests, 429 passed, 0 failed, 0 skipped, 0 xfailed.** Captured output:
 [logs/02_test_suite_offline.txt](../logs/02_test_suite_offline.txt).
 
 | Suite | Tests | Covers |
 |---|---|---|
 | `test_core.py` | 64 | ingestion, limits, chunking, ID contracts, security |
 | `test_retrieval.py` | 80 | embeddings, stores, retrieval, persistence, degradation |
-| `test_verification.py` | 114 | generation, verification, abstention, injection defence |
+| `test_verification.py` | 130 | generation, verification, abstention, injection defence |
 | `test_ui.py` | 98 | renders, states, inspector, contrast, no-placeholder audit |
-| `test_hardening.py` | 49 | evaluation integrity, calibration, security sweep, determinism, metrics, CLI, cross-platform paths, CI config |
+| `test_hardening.py` | 57 | evaluation integrity, calibration, **abstention-gate calibration**, security sweep, determinism, metrics, CLI, cross-platform paths, CI config |
 
 All 17 mandated edge cases and all 20 contract tests are covered.
 
@@ -335,19 +337,41 @@ not establish that the system generalises.
 
 ## 12. Limitations and future work
 
-**1. Abstention does not work on a non-empty index. Measured abstention rate: 0.000.** Asked about
-mercury's boiling point, the 2019 Cricket World Cup, and photosynthesis — none in the corpus — the
-system answered all three, quoting the least-irrelevant sentence available, at mean support 0.59
-across 9 claims ([logs/07](../logs/07_abstention_q1.txt), [08](../logs/08_abstention_q2.txt),
-[09](../logs/09_abstention_q3.txt)).
+**1. Abstention is lexical, and six adversarial questions still defeat it.** This was the project's
+worst measured failure and it was **0.000**: asked about mercury's boiling point, the 2019 Cricket
+World Cup and photosynthesis — none in the corpus — the system answered all three, quoting the
+least-irrelevant sentence available, at mean support 0.59 across 9 claims. Across 10 out-of-corpus
+questions that produced 50 claims, **15 of them labelled `Verified`**. Captured before the fix in the
+first commit of `logs/07`–`09`; the current runs show abstention.
 
-The abstention *path* is implemented and tested: an empty index returns a correct abstained response.
-The defect is in the generator's trigger, which asks "is any sentence relevant enough?" and never
-asks "do these passages answer the question?". TF-IDF cosine between unrelated English sentences is
-near zero but never exactly zero, so something always clears the bar. This is worse than a high
-false-abstention rate, because the failure mode is a confident answer with genuine citations from
-irrelevant passages — the *appearance* of an informed system. A relevance floor on the retrieved set
-is the fix; it was not attempted.
+The cause was that the generator's only trigger asked "is any sentence relevant enough?" and never
+"do these passages answer the question?" — TF-IDF cosine between unrelated English sentences is
+near zero but never exactly zero, so something always cleared the bar.
+
+The fix refuses **before** generation, on a threshold calibrated against 48 hand-labelled questions.
+The obvious fix was measured and rejected: a floor on the cosine `relevance_score` cannot separate
+the two classes (answerable top-1 scores 0.138–0.257, unanswerable 0.072–0.192), so any floor
+catching most unanswerable questions also killed at least five of eight answerable ones. The shipped
+gate scores **coverage of the question's content words** by the retrieved passages, which does
+separate (answerable minimum 0.667, clear unanswerable maximum 0.250), with
+`min_query_coverage = 0.50`.
+
+Measured after, on the same corpus:
+
+| Metric | Before | After |
+|---|---|---|
+| Correct abstention, 24 unanswerable | **0.000** | **0.750** (18/24) |
+|  clear negatives | 0.000 | **1.000** (18/18) |
+|  adversarial negatives | 0.000 | **0.000** (0/6) |
+| False abstention, 24 answerable | 0.000 | **0.000** |
+| False-`Verified` claims on the original 10 questions | **15** | **0** |
+| Claims emitted on those 10 questions | 50 | **0** |
+
+**The residual failure is not a tuning oversight.** The six misses ask for a fact the report never
+states while using vocabulary it does contain — "What is the inference throughput of MiniLM on this
+laptop?" names MiniLM and a student laptop, both of which appear. Coverage cannot separate those from
+answerable questions, and closing the gap needs entailment rather than a better threshold. They sit
+in the labelled set so the headline 0.750 cannot be improved by deleting them.
 
 **2. Verification is lexical support, not entailment.** See §8. A true synonym paraphrase scores
 ~0.10 and is `Unsupported`. NLI is the documented next step and is out of scope here.
@@ -452,7 +476,8 @@ Stated plainly so the gap is not mistaken for oversight:
 | ~~Green CI run~~ | **ACHIEVED** — run 37880879892 on `66075b`, all three jobs green. Required fixing a Windows-path bug that had the evaluation tests raising `FileNotFoundError` on Linux | — |
 | Semantic-profile figures | No model weights on this machine | download + time |
 | Greyscale / keyboard / viewport checks | Require a person looking at a screen | Phase 7 manual pass |
-| Evaluation cases for the antonym branch | The 24-case set contains no antonym pair, so a corrected branch stays unmeasured | **R-25** ? 3-4 cases would close it |
+| Evaluation cases for the antonym branch | The 24-case set contains no antonym pair, so a corrected branch stays unmeasured | **R-25** — 3-4 cases would close it |
+| 6 adversarial abstention misses | Measured, documented, and **left failing on purpose**. A lexical gate cannot separate "the words are here" from "the answer is here" | entailment (P3), not a better threshold |
 
 **Gate G7 is not passed.** See
 [15_PROGRESS_TRACKER.md](15_PROGRESS_TRACKER.md#1-current-status).

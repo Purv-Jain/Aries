@@ -752,12 +752,26 @@ def render_workspace(pipeline: ResearchPipeline) -> None:
 def _render_answer(response: AnswerResponse) -> None:
     st.markdown('<div class="vs-card-head">Answer</div>', unsafe_allow_html=True)
     if response.answer.abstained:
+        # The generic line is the headline; the pipeline's own note carries the specifics --
+        # which query terms failed to match, and against which floor. Rendering only the
+        # generic version would tell the user the system declined without letting them
+        # check why, which is the one thing a refusal has to be able to survive.
+        reason = response.answer.abstention_reason or ""
+        headline = (
+            "Nothing in the indexed documents matches this question."
+            if reason == "insufficient_query_coverage"
+            else "The retrieved evidence was insufficient."
+        )
         st.markdown(
-            '<div class="vs-info"><strong>No answer was produced.</strong> The retrieved evidence '
-            "was insufficient, so the system declined rather than answering from memory. "
-            'Add documents, or rephrase to match the document language.</div>',
+            f'<div class="vs-info"><strong>No answer was produced.</strong> {escape(headline)} '
+            "The system declined rather than quoting a passage that does not address the "
+            "question.</div>",
             unsafe_allow_html=True,
         )
+        for note in response.answer.notes:
+            st.markdown(
+                f'<div class="vs-note">{escape(note)}</div>', unsafe_allow_html=True
+            )
         return
     if response.answer.degraded:
         st.markdown(

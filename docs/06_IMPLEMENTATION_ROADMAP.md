@@ -361,11 +361,17 @@ required" read as opposite. Accuracy over the 24 cases moved 0.292 → 0.625 →
 was visible to the unit suite; both are now covered by tests. See
 [15 §7.4](15_PROGRESS_TRACKER.md#74-calibration--the-threshold-is-now-a-measurement-not-a-guess).
 
-**One measured result is bad and is part of the gate's output.** Abstention rate is **0.000** on
-three deliberately unanswerable questions (R-24). The abstention path is implemented and correct; the
-extractive generator's trigger is not. Fixing it needs a relevance floor on the retrieved set, which
-was not attempted in Phase 6. Reporting it is the point; hiding it would have made the gate pass by
-omission.
+**One measured result was bad, and it was reported rather than buried.** At the close of Phase 6 the
+abstention rate was **0.000** on three deliberately unanswerable questions (R-24). The empty-index
+path was implemented and correct; the trigger for *insufficient* evidence did not exist. Hiding it
+would have made the gate pass by omission.
+
+**It was fixed in Phase 7.** A query-coverage gate now runs after retrieval and before generation,
+with its floor calibrated on 48 hand-labelled questions: correct abstention **0.750** (18/24),
+false abstention **0.000** (0/24). A threshold on the existing cosine `relevance_score` was measured
+first and **rejected** ? the two classes overlap on it. Details in
+[14_RISK_REGISTER.md](14_RISK_REGISTER.md) and
+[10_EVALUATION_METRICS.md](10_EVALUATION_METRICS.md).
 
 ## 8. Phase 7 — Stage 3 Readiness
 

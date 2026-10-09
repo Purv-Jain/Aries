@@ -11,18 +11,18 @@ Intel64 Family 6 Model 154, 8 logical CPUs, CPython 3.14.6, no GPU, `.venv` with
 | # | File | Command | What it proves |
 |---|---|---|---|
 | 01 | [01_environment.txt](01_environment.txt) | `python --version`, `platform.platform()`, `pip list --format=freeze` | The interpreter and exact dependency set every other figure was produced on |
-| 02 | [02_test_suite_offline.txt](02_test_suite_offline.txt) | `pytest -q -m "not semantic"` with all three `*_OFFLINE=1`, then `pip check` | **405 passed, 6 deselected**, 0 failures, 0 skipped, 0 xfailed |
+| 02 | [02_test_suite_offline.txt](02_test_suite_offline.txt) | `pytest -q -m "not semantic"` with all three `*_OFFLINE=1`, then `pip check` | **429 passed, 6 deselected**, 0 failures, 0 skipped, 0 xfailed |
 | 03 | [03_run_demo.txt](03_run_demo.txt) | `run_demo.py --pdf <report> --question "Which sentence splitter…"` | A full index → ask → verify cycle on the real 15-page paper: 15 pages → 46 chunks, 5 claims verified, wall time 0.43 s |
 | 04 | [04_measure.txt](04_measure.txt) | `python -X utf8 tools\measure.py` | The 13 measured metrics: Recall@1 0.667, Recall@3+ 1.0, MRR 0.778, indexing 3.236 s/100 pages, query p50 12.40 ms, determinism 1.0, peak RSS 191.3 MB, **abstention 0.0** |
 | 05 | [05_evaluate.txt](05_evaluate.txt) | `python -X utf8 tools\evaluate.py --sweep`, then `tools\build_cases.py` | The threshold sweep 0.30→0.90 and the chosen point 0.63; plus `verbatim check: all 24 passages found in the extraction` |
 | 06 | [06_ui_headless.txt](06_ui_headless.txt) | `streamlit run app.py --server.headless true --server.port=8611`, then two HTTP requests | Root `status=200 len=6463`, `_stcore/health` → `ok`, `traceback present: False` |
-| 07 | [07_abstention_q1.txt](07_abstention_q1.txt) | `run_demo.py --question "What is the boiling point of mercury?"` | **R-24, question 1 of 3.** The question is not in the corpus; the system answered anyway |
+| 07 | [07_abstention_q1.txt](07_abstention_q1.txt) | `run_demo.py --question "What is the boiling point of mercury?"` | **R-24 before/after, question 1 of 3.** The question is not in the corpus; the system answered anyway |
 | 08 | [08_abstention_q2.txt](08_abstention_q2.txt) | `run_demo.py --question "Who won the 2019 Cricket World Cup?"` | **R-24, question 2 of 3.** Five claims, all `Verified` at support 1.00 |
 | 09 | [09_abstention_q3.txt](09_abstention_q3.txt) | `run_demo.py --question "How does photosynthesis convert light energy into chemical energy?"` | **R-24, question 3 of 3** |
 
 ## The three logs that matter most
 
-**02** is the reproducibility claim. 405 tests, no network, no model download, on a machine whose only
+**02** is the reproducibility claim. 429 tests, no network, no model download, on a machine whose only
 Python is the pinned one.
 
 **04 and 05** are the measurement claim. Every number in the Stage 3 report appears here first.

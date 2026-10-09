@@ -41,6 +41,7 @@ from src.chunking import split_sentences
 from src.models import (
     Claim,
     CitationRef,
+    CoverageReport,
     EvidenceChunk,
     GeneratedAnswer,
 )
@@ -53,6 +54,7 @@ __all__ = [
     "build_generator",
     "assign_citation_labels",
     "build_markers",
+    "insufficient_evidence_answer",
 ]
 
 MIN_CLAIM_WORDS = 4
@@ -217,6 +219,47 @@ class ExtractiveGenerator:
             for claim in claims
         )
         return GeneratedAnswer(text=answer_text, claims=tuple(claims), generator=self.name)
+
+
+def insufficient_evidence_answer(
+    coverage: CoverageReport,
+    floor: float,
+) -> GeneratedAnswer:
+    """Build the refusal the pipeline returns when nothing worth quoting was retrieved.
+
+    Lives here, not in `pipeline.py`, because this module owns `GeneratedAnswer` and the
+    abstention vocabulary. The pipeline decides *whether* to refuse; it does not invent a
+    new shape for refusing.
+
+    The note names the terms that did and did not match. "I could not answer this" is
+    unfalsifiable from the outside; "none of `photosynthesis`, `convert`, `chemical`
+    appears in any retrieved passage" is a claim the user can check against the passages
+    the UI is already showing them, which is the whole point of the system.
+    """
+    if coverage.missing:
+        detail = (
+            "These words from the question do not appear in any retrieved passage: "
+            + ", ".join(f"`{term}`" for term in coverage.missing)
+            + "."
+        )
+    else:
+        detail = "The question's wording does not match the retrieved passages closely enough."
+    return GeneratedAnswer(
+        text="",
+        claims=(),
+        generator="none",
+        abstained=True,
+        abstention_reason="insufficient_query_coverage",
+        notes=(
+            (
+                f"No answer was produced. Question-to-passage coverage was {coverage.value:.2f}, "
+                f"below the configured floor of {floor:.2f}. {detail} Answering anyway would mean "
+                "quoting a passage that does not address the question, so the system declined. "
+                "Add a document that covers this topic, or rephrase the question using the "
+                "document's own vocabulary."
+            ),
+        ),
+    )
 
 
 class FlanT5Generator:

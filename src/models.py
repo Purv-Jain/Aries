@@ -388,6 +388,94 @@ class VerificationConfig:
 
 
 @dataclass(frozen=True)
+class CoverageReport:
+    """How much of a question's vocabulary the retrieved passages actually contain.
+
+    This is the *retrieval-side* answer to "do these passages talk about what was
+    asked?", and it is deliberately **not** `relevance_score`. The two disagree, and the
+    disagreement is the finding that produced this type: on the 48-case labelled set
+    the top-1 cosine of an answerable question overlaps the top-1 cosine of an
+    unanswerable one, so no threshold on that score can separate them. Coverage
+    separates them cleanly. See `pipeline.query_coverage` for the measurement.
+
+    Kept as a report rather than a bare float so the UI and the evaluation harness can
+    show *which* terms matched and which did not. A number the user cannot interrogate
+    is a number they have to trust, which is the thing this project is against.
+    """
+
+    covered: tuple[str, ...]
+    missing: tuple[str, ...]
+
+    @property
+    def terms(self) -> int:
+        return len(self.covered) + len(self.missing)
+
+    @property
+    def value(self) -> float:
+        """Fraction of the question's content terms present. `1.0` when the question
+        has no content terms at all, because absence of signal is not evidence of
+        absence of an answer.
+
+        Callers must handle the no-terms case explicitly rather than trusting this
+        value: `1.0` would sail through any gate, which is the intended
+        do-not-abstain behaviour but is a decision, not a measurement.
+        """
+        if not self.terms:
+            return 1.0
+        return len(self.covered) / self.terms
+
+
+@dataclass(frozen=True)
+class AbstentionConfig:
+    """When the pipeline refuses to answer rather than quoting weak evidence.
+
+    Separated from `VerificationConfig` because the two answer different questions.
+    Verification asks *does this cited passage support this claim*, and it runs after
+    an answer exists. This asks *was there anything worth answering from*, and it runs
+    before generation, so a claim is never manufactured only to be labelled Unsupported
+    afterwards.
+
+    **`min_query_coverage` is calibrated on labelled data, not chosen.** The sweep over
+    [tests/data/abstention_cases.jsonl](../tests/data/abstention_cases.jsonl) is in
+    [docs/10_EVALUATION_METRICS.md](docs/10_EVALUATION_METRICS.md). 24 answerable and
+    24 unanswerable questions give a clean gap: answerable coverage bottoms out well
+    above the floor and unanswerable coverage tops out well below it. The floor sits
+    inside that gap and is never derived from a single example.
+    """
+
+    # 0.50 sits inside the measured gap between the answerable minimum (0.667) and the
+    # unanswerable maximum (0.250) for `retrieved` scope. Rounded from the mid-gap of
+    # 0.458; the margin absorbs a labeller disagreeing with one borderline label.
+    #
+    # **0.65 scores marginally better on the labelled set and is still the wrong choice.**
+    # The sweep gives floor 0.65 a correct-abstention rate of 0.792 at the same 0.000
+    # false-abstention rate, so it dominates 0.50 on the headline numbers. Its margin to
+    # the nearest answerable case is 0.017, however: one labelled question sits at 0.667,
+    # and re-phrasing it, or a chunk-boundary change, would push it under. At 0.50 that
+    # margin is 0.167 on the answerable side and 0.250 on the unanswerable side.
+    #
+    # Picking 0.65 would be fitting the threshold to the set that justifies it, which is
+    # the exact failure this project's own evidence rules exist to prevent. Recorded in
+    # docs/10_EVALUATION_METRICS.md so the decision is auditable rather than invisible.
+    min_query_coverage: float = 0.50
+    # "retrieved" pools every chunk the pipeline retrieved, which is what the generator
+    # is actually allowed to quote. "top" scores only the highest-ranked chunk, which is
+    # stricter and misses answers that live at rank 3.
+    coverage_scope: str = "retrieved"
+    enabled: bool = True
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.min_query_coverage <= 1.0:
+            raise ValueError(
+                f"min_query_coverage must be in [0, 1]; got {self.min_query_coverage!r}"
+            )
+        if self.coverage_scope not in {"retrieved", "top"}:
+            raise ValueError(
+                f"unknown coverage_scope: {self.coverage_scope!r}; expected 'retrieved' or 'top'"
+            )
+
+
+@dataclass(frozen=True)
 class CitationRef:
     """One `[S?, p.?]` reference as written in an answer.
 
@@ -436,6 +524,14 @@ class GeneratedAnswer:
     abstained: bool = False
     abstention_reason: str | None = None
     notes: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        # `notes=( "a" "b" )` reads as a tuple but is a plain string, and a string iterates
+        # character by character. Every consumer here joins or scans `notes`, so the result is
+        # a UI panel of single letters that looks like corrupted text rather than an error.
+        # Coerced here so a caller who writes `notes="..."` gets one note instead of 200.
+        if isinstance(self.notes, str):
+            object.__setattr__(self, "notes", (self.notes,))
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -566,6 +662,7 @@ class PipelineConfig:
     generator: str = "extractive"
     persist_path: Path | None = None
     verification: VerificationConfig = VerificationConfig()
+    abstention: AbstentionConfig = AbstentionConfig()
     limits: ResourceLimits = ResourceLimits()
 
     def __post_init__(self) -> None:
