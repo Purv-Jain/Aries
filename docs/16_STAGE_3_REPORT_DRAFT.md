@@ -20,7 +20,7 @@ claim**, labelling each claim `Verified`, `Needs Review`, or `Unsupported` and s
 beside the score.
 
 The system was built and evaluated against the team's own 15-page, two-column Stage 2 report. On a
-24-case hand-labelled set the verifier achieved **precision 1.000, recall 0.800, F1 0.889** for the
+34-case hand-labelled set the verifier achieved **precision 1.000, recall 0.846, F1 0.917** for the
 `Verified` class, with a **false-`Verified` rate of 0.000** at a calibrated threshold of 0.63 — the
 figure the project exists to drive down, and one that moved from 0.125 by measurement rather than
 argument. Retrieval reached **Recall@1 0.667** and **Recall@3 1.000** on 9 hand-authored questions.
@@ -200,16 +200,16 @@ support score and retrieval relevance as **separately labelled rows**.
 
 ## 10. Testing
 
-**429 tests, 429 passed, 0 failed, 0 skipped, 0 xfailed.** Captured output:
+**441 tests, 441 passed, 0 failed, 0 skipped, 0 xfailed.** Captured output:
 [logs/02_test_suite_offline.txt](../logs/02_test_suite_offline.txt).
 
 | Suite | Tests | Covers |
 |---|---|---|
 | `test_core.py` | 64 | ingestion, limits, chunking, ID contracts, security |
 | `test_retrieval.py` | 80 | embeddings, stores, retrieval, persistence, degradation |
-| `test_verification.py` | 130 | generation, verification, abstention, injection defence |
+| `test_verification.py` | 136 | generation, verification, abstention, antonym subject gate, injection defence |
 | `test_ui.py` | 98 | renders, states, inspector, contrast, no-placeholder audit |
-| `test_hardening.py` | 57 | evaluation integrity, calibration, **abstention-gate calibration**, security sweep, determinism, metrics, CLI, cross-platform paths, CI config |
+| `test_hardening.py` | 63 | evaluation integrity, calibration, **abstention-gate and antonym-branch measurement**, security sweep, determinism, metrics, CLI, cross-platform paths, CI config |
 
 All 17 mandated edge cases and all 20 contract tests are covered.
 
@@ -256,14 +256,19 @@ input the project faces). Method for each: [10 §11](10_EVALUATION_METRICS.md#11
 | Marker coverage (extractive) | 1.000 |
 | Citation resolution rate | 1.000 |
 
-### 11.2 Verification, on the 24-case labelled set
+### 11.2 Verification, on the 34-case labelled set
 
 | Threshold | P(Verified) | R(Verified) | F1 | false-`Verified` |
 |---|---|---|---|---|
-| 0.30 | 0.643 | 0.900 | 0.750 | 0.357 |
-| 0.59 | 0.889 | 0.800 | 0.842 | 0.111 |
-| **0.63 — chosen** | **1.000** | **0.800** | **0.889** | **0.000** |
-| 0.80 | 1.000 | 0.400 | 0.571 | 0.000 |
+| 0.30 | 0.600 | 0.923 | 0.727 | 0.400 |
+| 0.45 | 0.750 | 0.923 | 0.828 | 0.250 |
+| 0.57 | 0.846 | 0.846 | 0.846 | 0.154 |
+| 0.59 | 0.917 | 0.846 | 0.880 | 0.083 |
+| **0.63 — chosen** | **1.000** | **0.846** | **0.917** | **0.000** |
+| 0.70 | 1.000 | 0.769 | 0.870 | 0.000 |
+| 0.80 | 1.000 | 0.462 | 0.632 | 0.000 |
+| 0.85 | 1.000 | 0.077 | 0.143 | 0.000 |
+| 0.87 | 0.000 | 0.000 | 0.000 | 0.000 |
 
 0.63 is the highest-F1 point at which no claim is wrongly labelled `Verified`. Sweep output:
 [logs/05_evaluate.txt](../logs/05_evaluate.txt).
@@ -285,7 +290,7 @@ here would be invented.
 
 ### 11.5 What the evaluation found about itself
 
-**Five real verifier defects.** The first two were invisible to the unit suite and surfaced only by
+**Six real verifier defects.** The first two were invisible to the unit suite and surfaced only by
 running the system against real academic text:
 
 1. The negation check compared one sentence against a whole 180-word paragraph. Six plainly-supported
@@ -294,7 +299,7 @@ running the system against real academic text:
 2. The negation check compared *cue words* rather than *polarity*, so "does not depend" and "no ?
    required" read as opposite.
 
-Accuracy over the 24 cases: **0.292 ? 0.625 ? 0.667** for the first two.
+Accuracy over the 24 cases as they stood then: **0.292 → 0.625 → 0.667** for the first two.
 
 The next three were found later, by writing direct unit tests for helper functions that had only ever
 been reached indirectly:
@@ -318,15 +323,34 @@ been reached indirectly:
    claim's own direction ? "Accuracy increased while latency decreased" is a mixed result, not a
    denial of the claim.
 
-**Fixing 3, 4 and 5 moved no measured number.** Accuracy stayed at 0.667; precision, recall, F1 and
-the false-`Verified` rate are unchanged, and the sweep returns the same threshold of 0.63. All five
-defects pushed the same way ? toward *failing* to catch contradictions ? and on this fixture every
-contradiction the evaluation credits to the verifier is caught by the numeric and polarity branches.
-The calibration was therefore never built on a broken branch.
+**Fixing 3, 4 and 5 moved no measured number, and that is what forced the sixth defect into the
+open.** Accuracy stayed at 0.667; the sweep returned the same 0.63; and the reason nothing moved was
+that the labelled set contained no antonym pair for those fixes to affect. All five pushed the same
+way — toward *failing* to catch contradictions — and every contradiction the evaluation credited to
+the verifier was being caught by the numeric and polarity branches anyway. The calibration was never
+built on a broken branch; it simply could not see one.
 
-That is the honest reading, and it carries its own admission: **the antonym branch is correct code
-that no measurement in this report exercises.** It is a gap alongside the abstention failure, not a
-success. Thirty-one direct tests now cover it, four of which guard the concept list itself as data.
+So the set was extended with **ten antonym cases**, authored from real report passages the same way
+the other 24 were. That produced two results.
+
+First, the fixes do now show: 4 of 4 contradictions detected, 6 of 6 non-firings correctly silent,
+accuracy **0.667 → 0.735**, `Verified` recall 0.800 → 0.846, F1 0.889 → 0.917, precision still
+1.000, false-`Verified` still 0.000, and **the chosen threshold did not move off 0.63**.
+
+Second, and more useful, the new cases found a defect the 31 unit tests could not see:
+
+6. **The check contradicted claims about a different subject.** It asked only whether the passage
+   contained an opposite direction word *somewhere*. “The paid API expenditure increased after Stage
+   2” was reported `contradiction_detected` by a 300-character window about reproducibility and blind
+   trust that merely contained the word “reduces”. A false contradiction is worse than a missed
+   one: it does not merely fail to catch an error, it tells the user the source says the opposite,
+   with the same confident explanation a real detection carries. Fixed with a subject gate — an
+   antonym counts only if the claim is about the sentence holding it, with a single-sentence
+   exemption so “It was profitable.” against “It was expensive.” keeps firing.
+
+Every one of these defects was found by running the system on real text rather than by reading it.
+That is the argument for the evaluation set existing, and also the argument against trusting it:
+**it is self-authored and self-labelled by the team that wrote the verifier** (below).
 
 **The evaluation set is self-authored and self-labelled** by the team that wrote the verifier, from a
 single 15-page report. 58% of cases are negative or partial, every passage is verbatim-checked against
@@ -387,12 +411,15 @@ index. English-first, both explicit scope decisions.
 **6. The system cannot distinguish a correct claim from a claim that matches an irrelevant passage
 well.** This is limitation 1 seen from the other side.
 
-**7. The antonym contradiction branch is unexercised by any measurement.** Three live defects lived
-there for six phases ? it searched the wrong token set, its negation guard could not see `not`, and its
-inflections never crossed (`increase`/`decrease` and `increased`/`decreased` were separate pairs) ? and
-the 24-case set never noticed any of them, because it contains no antonym pair. All three are fixed and
-unit-tested, and fixing all three moved accuracy not at all. The branch is correct code that nothing
-has been measured against against labelled data (?11.5).
+**7. The antonym contradiction branch — three defects found, and then a fourth by measuring it.** Three
+live defects lived there for six phases: it searched the wrong token set, its negation guard could not
+see `not`, and its inflections never crossed. All three are fixed, and the 24-case set could not have
+caught any of them because it contained no antonym pair. Ten labelled antonym cases were added; all
+four contradictions are now detected and all six non-firings stay silent. **They also exposed a fourth
+defect the 31 unit tests could not see** — a claim about any subject was reported contradicted if the
+passage contained an opposite direction word anywhere, so “The paid API expenditure increased after
+Stage 2” was labelled `contradiction_detected` by a table row about blind trust. Fixed with a subject
+gate (§11.5).
 
 Future work, in the order it would be worth doing: a relevance floor for abstention; a larger
 independently labelled set; NLI-based verification; an ablation quantifying what the semantic
@@ -476,7 +503,7 @@ Stated plainly so the gap is not mistaken for oversight:
 | ~~Green CI run~~ | **ACHIEVED** — run 37880879892 on `66075b`, all three jobs green. Required fixing a Windows-path bug that had the evaluation tests raising `FileNotFoundError` on Linux | — |
 | Semantic-profile figures | No model weights on this machine | download + time |
 | Greyscale / keyboard / viewport checks | Require a person looking at a screen | Phase 7 manual pass |
-| Evaluation cases for the antonym branch | The 24-case set contains no antonym pair, so a corrected branch stays unmeasured | **R-25** — 3-4 cases would close it |
+| ~~Evaluation cases for the antonym branch~~ | **CLOSED.** 10 antonym cases added; 4/4 contradictions detected, 6/6 non-firings stay silent. Adding them also exposed a **fourth** defect — subject mismatch — that the 31 unit tests could not see | — |
 | 6 adversarial abstention misses | Measured, documented, and **left failing on purpose**. A lexical gate cannot separate "the words are here" from "the answer is here" | entailment (P3), not a better threshold |
 
 **Gate G7 is not passed.** See

@@ -332,6 +332,159 @@ class TestAbstentionGateIsCalibrated:
         return measure_abstention(pipeline)
 
 
+class TestAntonymBranchIsMeasured:
+    """R-25: the antonym check had 31 unit tests and zero labelled cases.
+
+    Unit tests prove the function fires on hand-built minimal pairs. They cannot prove it stays
+    quiet on a real passage about a different subject, which is the failure that actually mattered:
+    `ant_08` and `ant_09` were reported `contradiction_detected` against passages that never
+    mentioned the claim's subject at all.
+    """
+
+    @staticmethod
+    def _cases() -> list[dict]:
+        return [
+            json.loads(line)
+            for line in CASES_PATH.read_text("utf-8").splitlines()
+            if line.strip()
+        ]
+
+    def test_the_labelled_set_actually_contains_an_antonym_pair(self) -> None:
+        """The gap that let three live defects sit undetected for six phases."""
+        from src.verifier import _ANTONYM_MAP, content_tokens
+
+        cases = self._cases()
+        contradicted = [c for c in cases if c["category"] == "contradicted_antonym"]
+        assert len(contradicted) >= 3, "the antonym branch needs several labelled contradictions"
+
+        # Each one must genuinely contain a claim-side antonym word and a passage-side opposite.
+        for case in contradicted:
+            claim_tokens = content_tokens(case["claim"])
+            passage_tokens = content_tokens(case["passage"])
+            pairs = {
+                (token, sorted(_ANTONYM_MAP[token] & passage_tokens)[0])
+                for token in claim_tokens
+                if token in _ANTONYM_MAP and _ANTONYM_MAP[token] & passage_tokens
+            }
+            assert pairs, f"{case['case_id']} does not contain an antonym pair after all"
+
+    def test_the_branch_fires_on_exactly_the_labelled_contradictions(self) -> None:
+        from src.verifier import _antonym_conflict, content_tokens
+
+        fired, silent = [], []
+        for case in self._cases():
+            if not case["case_id"].startswith("ant_"):
+                continue
+            conflict = _antonym_conflict(
+                content_tokens(case["claim"]),
+                content_tokens(case["passage"]),
+                case["claim"],
+                case["passage"],
+            )
+            (fired if conflict else silent).append(case["case_id"])
+
+        assert fired == ["ant_01", "ant_02", "ant_03", "ant_04"]
+        assert silent == ["ant_05", "ant_06", "ant_07", "ant_08", "ant_09", "ant_10"]
+
+    def test_the_six_non_firings_each_decline_for_a_named_reason(self) -> None:
+        """Not "did not fire" but "declined for a reason we can state".
+
+        Four distinct decline paths: the passage uses the same direction, the claim is negated, the
+        antonym belongs to another subject, and there is no antonym word at all.
+        """
+        from src.verifier import _antonym_conflict, _claim_is_negated, content_tokens
+
+        by_id = {case["case_id"]: case for case in self._cases()}
+
+        def fires(cid: str) -> bool:
+            case = by_id[cid]
+            return (
+                _antonym_conflict(
+                    content_tokens(case["claim"]),
+                    content_tokens(case["passage"]),
+                    case["claim"],
+                    case["passage"],
+                )
+                is not None
+            )
+
+        # Same direction in the passage.
+        assert not fires("ant_05")
+        # The claim carries a negation cue, so the polarity guard reads it first.
+        assert _claim_is_negated(by_id["ant_07"]["claim"])
+        assert not fires("ant_07")
+        # Different subject: the antonym word is in the passage, about something else.
+        for cid in ("ant_08", "ant_09"):
+            assert not fires(cid), f"{cid} was reported as contradicting a passage that never does"
+        # No *opposite* word anywhere in the passage. The claim does carry a direction
+        # ("improved"); what is missing is the other side of the pair.
+        from src.verifier import _ANTONYM_MAP
+
+        claim_10 = content_tokens(by_id["ant_10"]["claim"])
+        assert claim_10 & set(_ANTONYM_MAP), "ant_10 was meant to carry a direction word"
+        assert not any(
+            _ANTONYM_MAP[token] & content_tokens(by_id["ant_10"]["passage"])
+            for token in claim_10 & set(_ANTONYM_MAP)
+        )
+
+    @needs_fixture
+    def test_the_four_contradictions_are_labelled_unsupported_end_to_end(self) -> None:
+        """The branch's output as the pipeline reports it, not as the helper returns it."""
+        import subprocess
+
+        fresh = subprocess.run(
+            [sys.executable, "-X", "utf8", "tools/evaluate.py", "--json",
+             str(RESULTS_PATH.with_name("_antonym_tmp.json"))],
+            cwd=str(PROJECT_ROOT), capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=900,
+        )
+        assert fresh.returncode == 0, fresh.stderr[-2000:]
+        try:
+            results = json.loads(RESULTS_PATH.with_name("_antonym_tmp.json").read_text("utf-8"))
+        finally:
+            RESULTS_PATH.with_name("_antonym_tmp.json").unlink(missing_ok=True)
+
+        rows = {row["case_id"]: row for row in results["per_case"]}
+        for case_id in ("ant_01", "ant_02", "ant_03", "ant_04"):
+            row = rows[case_id]
+            assert row["system_label"] == "Unsupported", f"{case_id}: {row}"
+            assert row["reason"] == "contradiction_detected", f"{case_id}: {row}"
+            assert row["passed"] is True, f"{case_id}: {row}"
+
+    @needs_fixture
+    def test_no_case_outside_the_four_is_reported_as_an_antonym_contradiction(self) -> None:
+        """The false positive is the thing that must not come back."""
+        import subprocess
+
+        fresh = subprocess.run(
+            [sys.executable, "-X", "utf8", "tools/evaluate.py", "--json",
+             str(RESULTS_PATH.with_name("_antonym_tmp2.json"))],
+            cwd=str(PROJECT_ROOT), capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=900,
+        )
+        assert fresh.returncode == 0, fresh.stderr[-2000:]
+        try:
+            results = json.loads(RESULTS_PATH.with_name("_antonym_tmp2.json").read_text("utf-8"))
+        finally:
+            RESULTS_PATH.with_name("_antonym_tmp2.json").unlink(missing_ok=True)
+
+        rows = {row["case_id"]: row for row in results["per_case"]}
+        for case_id in ("ant_08", "ant_09", "ant_10"):
+            assert rows[case_id]["reason"] != "contradiction_detected", (
+                f"{case_id} is reported as contradicted by a passage about another subject"
+            )
+        for case_id in ("ant_05", "ant_06", "ant_07"):
+            assert rows[case_id]["passed"] is True, f"{case_id}: {rows[case_id]}"
+
+    @needs_fixture
+    def test_false_verified_is_still_zero_with_the_antonym_cases_present(self) -> None:
+        """More labelled data must not have bought precision with false confidence."""
+        if not RESULTS_PATH.exists():
+            pytest.skip("no stored evaluation results")
+        stored = json.loads(RESULTS_PATH.read_text("utf-8"))
+        assert stored["default"]["false_verified_rate"] == 0.0
+        assert stored["case_count"] >= 34
+
     def test_the_configured_threshold_is_the_calibrated_one(self) -> None:
         """The shipped default must be the measured operating point, not the inherited guess."""
         from src.models import VerificationConfig

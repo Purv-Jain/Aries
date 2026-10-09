@@ -2,7 +2,7 @@
 
 **Status:** Phase 7 in progress — built, tested, calibrated, measured, and the Stage 3 report drafted.
 **Current gate:** `PHASE 7 ACTIVE — GATE G7 NOT YET PASSED`
-**Tests:** `pytest -q` → **429 passed, 6 deselected**, 0 failures (2026-10-09)
+**Tests:** `pytest -q` → **441 passed, 6 deselected**, 0 failures (2026-10-09)
 **Run it:** `streamlit run app.py`
 **Last updated:** 2026-10-08
 
@@ -72,9 +72,9 @@ No LangChain. No paid APIs. No GPU requirement. Rationale in
 | `app.py` | The whole UI: dashboard, document library, research workspace, evidence inspector, verification panel. Imports only the pipeline — never a leaf module | implemented, tested |
 | `requirements.txt` | 9 pinned direct dependencies | verified by a clean install |
 | `run_demo.py` | CLI reproducible run: index → ask → verify, exit 0/1/2, `--json` | implemented, tested |
-| `tools/evaluate.py`, `tools/build_cases.py` | 24-case labelled set from the real report; threshold sweep | measured |
+| `tools/evaluate.py`, `tools/build_cases.py` | 34-case labelled set from the real report; threshold sweep | measured |
 | `tools/measure.py` | Latency, Recall@k, MRR, RAM, determinism, abstention | measured |
-| `tests/data/eval_cases.jsonl` | The 24 hand-labelled cases; every passage verbatim-checked | measured |
+| `tests/data/eval_cases.jsonl` | The 34 hand-labelled cases, 10 of them antonym contradictions; every passage verbatim-checked | measured |
 | `tests/data/metrics.json`, `eval_results.json` | Raw measurement output — the source of every reported number | measured |
 | `.github/workflows/tests.yml` | Offline CI on Python 3.14, matrix over ubuntu + windows, plus a separate security sweep | **green** — run 37880879892, all three jobs success |
 
@@ -104,14 +104,19 @@ threshold* — lexical and semantic correspondence, **not** logical entailment a
 the claim is true.
 
 The threshold is now a measurement rather than a guess. Sweeping `verified_threshold` over a
-24-case labelled set built from the team's own 15-page Stage 2 report:
+34-case labelled set built from the team's own 15-page Stage 2 report:
 
 | Threshold | Verified precision | Verified recall | F1 | false-`Verified` |
 |---|---|---|---|---|
-| 0.30 | 0.643 | 0.900 | 0.750 | 0.357 |
-| 0.59 | 0.889 | 0.800 | 0.842 | 0.111 |
-| **0.63 — chosen** | **1.000** | **0.800** | **0.889** | **0.000** |
-| 0.80 | 1.000 | 0.400 | 0.571 | 0.000 |
+| 0.30 | 0.600 | 0.923 | 0.727 | 0.400 |
+| 0.45 | 0.750 | 0.923 | 0.828 | 0.250 |
+| 0.57 | 0.846 | 0.846 | 0.846 | 0.154 |
+| 0.59 | 0.917 | 0.846 | 0.880 | 0.083 |
+| **0.63 — chosen** | **1.000** | **0.846** | **0.917** | **0.000** |
+| 0.70 | 1.000 | 0.769 | 0.870 | 0.000 |
+| 0.80 | 1.000 | 0.462 | 0.632 | 0.000 |
+| 0.85 | 1.000 | 0.077 | 0.143 | 0.000 |
+| 0.87 | 0.000 | 0.000 | 0.000 | 0.000 |
 
 0.63 is the highest-F1 point at which **no** claim is wrongly labelled `Verified`. The previous value
 of 0.62 was inherited from Stage 2 and carried a measured false-`Verified` rate of 0.125.
@@ -156,7 +161,7 @@ Read these in order if you are new.
 | [07_UI_UX_DESIGN_SPEC.md](docs/07_UI_UX_DESIGN_SPEC.md) | Design system, layout, states, accessibility, Streamlit method |
 | [08_DATA_MODELS_AND_API_CONTRACTS.md](docs/08_DATA_MODELS_AND_API_CONTRACTS.md) | Typed structures and pipeline contracts |
 | [09_TESTING_STRATEGY.md](docs/09_TESTING_STRATEGY.md) | All mandated test scenarios, fixtures, CI |
-| [10_EVALUATION_METRICS.md](docs/10_EVALUATION_METRICS.md) | Metric definitions, the 24-case labelling plan, and **the measured results** |
+| [10_EVALUATION_METRICS.md](docs/10_EVALUATION_METRICS.md) | Metric definitions, the 34-case labelling plan, and **the measured results** |
 | [11_DEMO_AND_VIVA_PREPARATION.md](docs/11_DEMO_AND_VIVA_PREPARATION.md) | Demo script, likely examiner questions, traps |
 | [12_STAGE_3_EVIDENCE_TRACKER.md](docs/12_STAGE_3_EVIDENCE_TRACKER.md) | Every future report claim → the artifact that must back it |
 | [13_TEAM_CONTRIBUTIONS.md](docs/13_TEAM_CONTRIBUTIONS.md) | Planned ownership vs. verified actual contributions |
@@ -219,7 +224,7 @@ nothing depends on colour alone. Full spec in
 python -m venv .venv
 .venv\Scripts\activate                      # Windows
 pip install -r requirements.txt             # verified working on CPython 3.14.6
-pytest -q                                   # 429 passed, 6 deselected as of 2026-10-09
+pytest -q                                   # 441 passed, 6 deselected as of 2026-10-09
 pytest -q -m semantic                       # needs MiniLM + FLAN-T5 weights; never run yet
 streamlit run app.py                        # the application
 python run_demo.py --pdf <path>             # CLI: index -> ask -> verify, exit 0/1/2
@@ -232,7 +237,7 @@ python tools/measure.py --pdf <path>        # latency, Recall@k, RAM, determinis
 repository** (B-07). Without it they skip rather than fail.
 
 Use the pinned interpreter. `C:\Python314\python.exe` happens to have most of the stack, but the
-**verified** environment is `.venv`, and that is where all 429 passing tests were observed.
+**verified** environment is `.venv`, and that is where all 441 passing tests were observed.
 
 ## Licence and attribution
 

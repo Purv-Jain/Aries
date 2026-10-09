@@ -217,8 +217,16 @@ def sweep(cases: list[dict], chunks: list, backend: TfidfEmbeddingBackend) -> li
     """Sweep `verified_threshold` and report precision, recall, F1 and false-`Verified` at each point.
 
     `review_threshold` is held at half the verified threshold so the three bands stay ordered and
-    comparable; sweeping both independently would be a two-dimensional search over 24 cases, which
+    comparable; sweeping both independently would be a two-dimensional search over 34 cases, which
     would fit noise.
+
+    **The `accuracy` column in these rows is therefore not the shipped system's accuracy.** At
+    `verified_threshold = 0.63` this sweep runs with `review_threshold = 0.315`, while
+    `VerificationConfig` ships with `review_threshold = 0.40`. Three cases fall in the band between
+    them and change label as a result -- `eval_13`, `ant_09` and `ant_10` -- giving 0.706 here
+    against 0.735 for the shipped configuration. The headline accuracy quoted in the report is the
+    shipped one; this column exists only to compare thresholds against each other, and every row
+    shares the same review value, so the comparison is still like-for-like.
     """
     rows = []
     # The documented range is [0.30, 0.90]. Sweeping only up to 0.45 would be convenient but wrong:

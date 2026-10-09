@@ -52,6 +52,7 @@ from src.verifier import (
     _antonym_conflict,
     _claim_is_negated,
     _negations_in_matching_region,
+    _subject_gate_applies,
     _WORD,
     content_tokens,
     parse_markers,
@@ -269,7 +270,7 @@ class TestAntonymConcepts:
     def test_every_opposition_is_detected_across_inflections(
         self, claim: str, passage: str
     ) -> None:
-        assert _antonym_conflict(content_tokens(claim), content_tokens(passage), claim) is not None
+        assert _antonym_conflict(content_tokens(claim), content_tokens(passage), claim, passage) is not None
 
     @pytest.mark.parametrize(
         ("claim", "passage"),
@@ -283,19 +284,119 @@ class TestAntonymConcepts:
     def test_words_from_different_concepts_are_not_antonyms(
         self, claim: str, passage: str
     ) -> None:
-        assert _antonym_conflict(content_tokens(claim), content_tokens(passage), claim) is None
+        assert _antonym_conflict(content_tokens(claim), content_tokens(passage), claim, passage) is None
 
     def test_a_passage_reporting_both_directions_is_not_a_contradiction(self) -> None:
         # The false positive that a purely "opposite is present" rule produces. A passage saying both
         # "increased" and "decreased" is describing a mixed result, not denying the claim.
         claim = "Accuracy increased."
         passage = "Accuracy increased while latency decreased substantially."
-        assert _antonym_conflict(content_tokens(claim), content_tokens(passage), claim) is None
+        assert _antonym_conflict(content_tokens(claim), content_tokens(passage), claim, passage) is None
 
     def test_the_claims_own_direction_in_the_passage_declines(self) -> None:
         claim = "Results improved."
         passage = "Results improved, then later worsened."
-        assert _antonym_conflict(content_tokens(claim), content_tokens(passage), claim) is None
+        assert _antonym_conflict(content_tokens(claim), content_tokens(passage), claim, passage) is None
+
+
+class TestAntonymSubjectGate:
+    """The gate added in Phase 7, after the labelled set measured the false positive it prevents.
+
+    Before it, a claim about any subject at all was reported as contradicted as long as the
+    passage happened to contain an opposite direction word *somewhere*. Two labelled cases
+    (`ant_08`, `ant_09`) were reported `contradiction_detected` when the passage said nothing
+    about the claim's subject -- a confident, wrong explanation, which is worse than silence.
+    """
+
+    def test_a_different_subject_in_a_longer_passage_is_not_a_contradiction(self) -> None:
+        claim = "The number of retrieved passages increased during indexing."
+        passage = (
+            "The current default is approximately 180 words per chunk with a 30-word overlap. "
+            "The overlap reduces the chance that a definition or argument is split exactly at a "
+            "chunk boundary. This value is smaller than the Level 1 proposal because the selected "
+            "MiniLM model truncates long inputs."
+        )
+        assert _antonym_conflict(content_tokens(claim), content_tokens(passage), claim, passage) is None
+
+    def test_the_claim_still_fires_when_the_subject_matches(self) -> None:
+        claim = "Larger chunks reduce silent truncation."
+        passage = (
+            "Table 11: Technical viva questions and expected answers. "
+            "Smaller chunks reduce silent truncation and improve page-level evidence precision. "
+            "The Level 1 report mixed tokens and words."
+        )
+        assert _antonym_conflict(content_tokens(claim), content_tokens(passage), claim, passage)
+
+    def test_a_single_sentence_passage_is_exempt_so_minimal_pairs_still_fire(self) -> None:
+        """The exception that keeps the gate narrow.
+
+        "It was profitable." against "It was expensive." shares no content word at all. Demanding
+        overlap there would suppress a real detection, and the passage is one sentence long, so
+        there is nowhere else the claim could be about.
+        """
+        for claim, passage in [
+            ("It was profitable.", "It was expensive."),
+            ("The file is present.", "The file is missing."),
+            ("Accuracy was higher in this profile.", "Accuracy was lower in this profile."),
+        ]:
+            assert _antonym_conflict(
+                content_tokens(claim), content_tokens(passage), claim, passage
+            ) is not None, f"{claim!r} / {passage!r} must still be detected"
+
+    def test_a_shared_subject_word_survives_the_gate_inside_a_longer_passage(self) -> None:
+        """The gate keys on the claim and the contradicting sentence being *about* the same thing.
+
+        Both passages here are two sentences long, so the single-sentence exception does not apply.
+        They differ only in whether the claim and the refutation sentence share a subject word.
+        """
+        shared = "The result was confirmed."
+        detached = "The result was confirmed."
+
+        fires = (
+            "Table 12 lists the design trade-offs considered by the team. "
+            "The result was refuted by the reviewers."
+        )
+        blocked = (
+            "Table 12 lists the design trade-offs considered by the team. "
+            "The finding was refuted by the reviewers."
+        )
+        assert _antonym_conflict(
+            content_tokens(shared), content_tokens(fires), shared, fires
+        ) == "confirmed/refuted"
+        assert _antonym_conflict(
+            content_tokens(detached), content_tokens(blocked), detached, blocked
+        ) is None
+
+    def test_no_passage_text_disables_the_gate_rather_than_guessing(self) -> None:
+        """The gate needs sentences to reason over. With none, it must not invent a subject."""
+        claim_tokens = content_tokens("The number of retrieved passages increased.")
+        passage_tokens = content_tokens("The overlap reduces the chance of a split.")
+        assert _antonym_conflict(claim_tokens, passage_tokens, "increased", "") is not None
+        assert _subject_gate_applies(claim_tokens, "", {"reduces"}) is False
+
+    def test_the_gate_is_a_decline_rule_never_a_new_detection(self) -> None:
+        """Blocking must only ever remove detections, never add one.
+
+        Swept over every pair in the concept list, the guarded version's result set is a subset of
+        the unguarded one. A guard that invented contradictions would be a worse defect than the
+        one it fixed.
+        """
+        import itertools
+
+        from src.verifier import ANTONYM_PAIRS
+
+        forms = [form for pair in ANTONYM_PAIRS for form in pair]
+        checked = 0
+        for left, right in itertools.combinations(forms, 2):
+            claim = f"The {left} moved."
+            passage = f"The {right} moved."
+            ct, pt = content_tokens(claim), content_tokens(passage)
+            if _antonym_conflict(ct, pt, claim, passage) is not None:
+                assert _antonym_conflict(ct, pt, claim, "") is not None, (
+                    f"guard invented a detection for {left!r} / {right!r}"
+                )
+            checked += 1
+        assert checked > 100, f"only {checked} pairs swept"
 
 
 class TestContradictionHelpers:
@@ -307,23 +408,24 @@ class TestContradictionHelpers:
         claim = content_tokens("Accuracy was higher in this profile.")
         chunk = content_tokens("Accuracy was lower in this profile.")
         assert not (claim & chunk) & {"higher"}, "the token under test must not be in the intersection"
-        assert _antonym_conflict(claim, chunk, "Accuracy was higher in this profile.") == "higher/lower"
+        assert _antonym_conflict(claim, chunk, "Accuracy was higher in this profile.", "Accuracy was lower in this profile.") == "higher/lower"
 
     def test_agreement_is_not_a_conflict(self) -> None:
         claim = content_tokens("The chunk overlap is small.")
         chunk = content_tokens("The chunk overlap is small in this configuration.")
-        assert _antonym_conflict(claim, chunk, "The chunk overlap is small.") is None
+        assert _antonym_conflict(claim, chunk, "The chunk overlap is small.", "The chunk overlap is small in this configuration.") is None
 
     def test_a_negated_claim_is_not_flagged_as_contradicting(self) -> None:
         # "did not increase" and "increased" are not in conflict: the claim asserts the opposite of
         # what the passage asserts only when the negation is read. Without the guard the antonym
         # branch would suppress a correct citation.
         claim_text = "The chunk overlap did not increase."
-        chunk = content_tokens("The chunk overlap increased substantially.")
-        assert _antonym_conflict(content_tokens(claim_text), chunk, claim_text) is None
+        passage = "The chunk overlap increased substantially."
+        chunk = content_tokens(passage)
+        assert _antonym_conflict(content_tokens(claim_text), chunk, claim_text, passage) is None
 
     def test_unrelated_terms_produce_no_conflict(self) -> None:
-        assert _antonym_conflict(content_tokens("photosynthesis"), content_tokens("chromadb"), "photosynthesis") is None
+        assert _antonym_conflict(content_tokens("photosynthesis"), content_tokens("chromadb"), "photosynthesis", "chromadb") is None
 
     def test_claim_negation_is_read_from_raw_text(self) -> None:
         # `not`, `no`, `nor` and `without` are stopwords, so a token-set check built from

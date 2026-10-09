@@ -134,7 +134,7 @@ what this project's own evidence rules exist to prevent. The mid-gap of the two 
 and 0.50 is that value rounded to something a person would type.
 
 **Read these as 24 self-authored cases from one 15-page report.** They justify this operating point.
-They do not establish it as correct in general — the same caveat that applies to the 24-case
+They do not establish it as correct in general — the same caveat that applies to the 34-case
 verification set and to [R-10](14_RISK_REGISTER.md).
 
 ### What the gate does not do
@@ -144,6 +144,63 @@ passage *entails* an answer, it cannot see a fact that is stated in completely d
 it cannot catch the adversarial six. It also deliberately stays shut when a question contains no
 content words after stopword removal, because absence of signal is not evidence of absence — see
 `src.pipeline.query_coverage`.
+
+## 4c. The antonym branch — the labelled cases R-25 said were missing
+
+R-25 was accurate: the 24-case set contained **no antonym pair at all**, so the contradiction branch
+had 31 unit tests and zero labelled evidence. Ten cases were added, authored from real report
+passages in `tools/build_cases.py` (every passage verbatim-checked, as the other 24 are).
+
+### Four that must fire
+
+| Case | Page | Claim | Passage says | Pair detected |
+|---|---|---|---|---|
+| `ant_01` | 5 | “selected instead of a much **smaller** model” | “a much **larger** model” | `smaller/larger` |
+| `ant_02` | 14 | “**Larger** chunks reduce silent truncation” | “**Smaller** chunks reduce silent truncation” | `larger/smaller` |
+| `ant_03` | 3 | “chunk size was **increased**” | “chunk size has been **reduced**” | `increased/reduced` |
+| `ant_04` | 11 | “skipping the markers **degrades** reliability” | “**Improves** reliability for classroom evaluation” | `degrades/improves` |
+
+### Six that must stay silent, each for a different reason
+
+| Case | Why it must not fire |
+|---|---|
+| `ant_05` | The passage uses the **same** direction (`larger`, `increase`) — a mixed-results clause, not a denial |
+| `ant_06` | Restates the passage; `costs` is in both |
+| `ant_07` | The claim is **negated** (“was not increased”), which is the same fact as “reduced” |
+| `ant_08` | **Different subject.** “The number of retrieved passages increased” vs a passage whose “reduces” belongs to “overlap reduces the chance of a chunk-boundary split” |
+| `ant_09` | **Different subject, no shared vocabulary at all.** “The paid API expenditure increased” vs a 300-char window about reproducibility and blind trust |
+| `ant_10` | The claim carries a direction (`improved`) but the passage contains **no opposite** of it |
+
+### The fourth defect these cases found
+
+`ant_08` and `ant_09` were **reported as `contradiction_detected` before the subject gate existed.**
+A claim about any subject at all was contradicted as long as the passage contained an opposite
+direction word *somewhere* in it. `ant_09` in particular told the user the source said the opposite
+of a claim about paid API expenditure, when the source was a table row about reducing blind trust.
+
+That is worse than a missed contradiction, because it is a confident and wrong explanation. The gate
+now requires the claim to be about the **sentence carrying the antonym**, with one exemption: a
+single-sentence passage, because there is nowhere else the claim could be about. Without that
+exemption, “It was profitable.” against “It was expensive.” would stop being detected.
+
+Measured: **4/4 fire, 6/6 silent, 34/34 cases match their human label on reason.** A test asserts the
+gate's result set is a *subset* of the unguarded one across 100+ word pairs, so it can never invent a
+detection.
+
+### Effect on the calibration
+
+| Metric | 24 cases | 34 cases |
+|---|---|---|
+| Accuracy | 0.667 | **0.735** |
+| `Verified` precision | 1.000 | **1.000** |
+| `Verified` recall | 0.800 | **0.846** |
+| `Verified` F1 | 0.889 | **0.917** |
+| False-`Verified` | 0.000 | **0.000** |
+| Chosen threshold | 0.63 | **0.63** |
+
+The operating point did not move. Ten more labelled cases, seven of them new positives, changed the
+scores and left the threshold alone — which is the outcome a calibration wants, and not a guarantee
+that 0.63 is right. All 24 pre-existing cases produce byte-identical results before and after.
 
 ## 5. M3 — Claim-support precision / recall / F1
 
@@ -231,7 +288,7 @@ An abstention rate measured only on out-of-domain questions describes a system t
 **Implementation note.** `tools/evaluate.py` scores the *verifier* directly against each case's own
 cited passage and never calls `pipeline.ask()`, so the abstention gate is **not** in its path. The
 gate is measured by `tools/measure.py` and locked by `TestAbstentionGateIsCalibrated` in
-`tests/test_hardening.py`. The 24-case verification set and the 48-case abstention set measure
+`tests/test_hardening.py`. The 34-case verification set and the 48-case abstention set measure
 different components and are not substitutes for each other.
 
 ## 7. M5–M8 — Performance
@@ -357,9 +414,9 @@ full JSON is in [tests/data/metrics.json](../tests/data/metrics.json) and
 | Fabricated-marker rate | **0.000** | both fabricated `[S7, p.1]` cases → `Unsupported` | **MEASURED** |
 | Marker coverage (extractive) | **1.000** | every claim carried a resolvable marker | **MEASURED** |
 | Marker coverage (FLAN-T5) | `not measured` | — | **Pending — no weights on this machine** |
-| Verified-class precision | **1.000** | 24-case labelled set at threshold 0.63 | **MEASURED** |
-| Verified-class recall | **0.800** (8/10) | same | **MEASURED** |
-| Verified-class F1 | **0.889** | same | **MEASURED** |
+| Verified-class precision | **1.000** | 34-case labelled set at threshold 0.63 | **MEASURED** |
+| Verified-class recall | **0.846** (11/13) | same — up from 0.800 when 10 antonym cases were added | **MEASURED** |
+| Verified-class F1 | **0.917** | same — up from 0.889 | **MEASURED** |
 | **False-`Verified` rate** | **0.000** | same — **down from 0.125** at the previous 0.62 threshold | **MEASURED** |
 | **Correct abstention rate** (unanswerable) | **0.750** (18/24) | 48-case labelled set, `tests/data/abstention_cases.jsonl` | **MEASURED** — up from **0.000**. See [R-24](14_RISK_REGISTER.md) |
 |  └─ clear negatives | **1.000** (18/18) | same | **MEASURED** |

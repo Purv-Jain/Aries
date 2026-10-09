@@ -392,3 +392,34 @@ the gap requires entailment rather than a better threshold. This is a **new** pr
 in the same direction as ADR-0007: the system refuses rather than quotes something irrelevant.
 
 ---
+
+---
+
+## ADR-0015 — An antonym is only a contradiction if it is about the same thing
+
+**Status:** Accepted
+
+**Context.** The antonym check answers "does the passage use the opposite of the claim's direction
+word?". For six phases that was the whole rule, guarded by unit tests. Ten labelled antonym cases
+added in Phase 7 ([10 §4c](10_EVALUATION_METRICS.md)) showed it was not enough. `ant_09` — the
+claim "The paid API expenditure increased after Stage 2", against a 300-character passage about
+reproducibility and blind trust — was reported `contradiction_detected`, because the passage happened
+to contain "reduces" in an unrelated clause.
+
+A false contradiction is worse than a missed one. It does not merely fail to catch an error; it tells
+the user the source says the opposite, and it does so with the same confident explanation a real
+detection carries. The user who checks finds a table row about blind trust, and now has reason to
+distrust every other label the system produced.
+
+**Decision.** An opposite direction is a contradiction only when the claim shares vocabulary with
+**the sentence carrying it**. One exemption: if the passage is a single sentence, the check proceeds
+regardless, because there is nowhere else the claim could be about — without it,
+"It was profitable." against "It was expensive." would stop being detected.
+
+**Consequence, accepted knowingly.** The gate is a *decline* rule, so it pushes toward missing a
+contradiction rather than inventing one — the same direction ADR-0007 takes for support scores. A
+test asserts its result set is a subset of the unguarded one across 100+ word pairs, so it can never
+introduce a detection. It is a lexical proxy for "about the same thing", not a parse; a claim and a
+passage that are genuinely about the same subject using entirely different vocabulary will still be
+missed.
+

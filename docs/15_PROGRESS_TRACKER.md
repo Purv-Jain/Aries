@@ -14,7 +14,7 @@
 | **Phase complete** | Phases 0–6: research, documentation, foundation, retrieval, verification, UI, testing + hardening |
 | **Phase in progress** | **7** (Stage 3 readiness) — report **drafted** at [16_STAGE_3_REPORT_DRAFT.md](16_STAGE_3_REPORT_DRAFT.md), logs captured in [logs/](../logs/README.md) |
 | **G7 blocked on** | **Screenshots S1–S9** (no human at a screen), **B-05** (no repository ⇒ no contribution table, no CI), semantic-profile figures (no weights) |
-| **Tests written** | **429** across `test_core.py` (64), `test_retrieval.py` (80), `test_verification.py` (130), `test_ui.py` (98), `test_hardening.py` (57) |
+| **Tests written** | **441** across `test_core.py` (64), `test_retrieval.py` (80), `test_verification.py` (136), `test_ui.py` (98), `test_hardening.py` (63) |
 | **Commits made** | **2** — `fd2be70` (Phase 7, attributed) and `9772226` (Phases 0–6, **placeholder author**, B-05) |
 | **CI** | **GREEN.** Run [37880879892](https://github.com/Purv-Jain/Aries/actions/runs/37880879892) on `66075b`: `offline (ubuntu-latest)`, `offline (windows-latest)`, `security-sweep` all **success**. B-08 closed |
 | **Model weights downloaded** | 0 — semantic and abstractive paths written, **unmeasured** |
@@ -31,7 +31,7 @@
 | 3 | Retrieval | **DONE** | Purv | G3 **passed** | `pytest -q` → 144 passed; see §7 |
 | 4 | Generation + verification | **DONE** | Rishabh / Purv | G4 **passed** | `pytest -q` → 227 passed; see §7 |
 | 5 | Premium UI | **DONE** | Purv | G5 **passed**, 3 manual items pending | `pytest -q` → 325 passed; headless HTTP 200; see §7 |
-| 6 | Testing + hardening | **DONE** | Bhavya | G6 **passed**, CI green | `pytest -q` → 429 passed; see §7 |
+| 6 | Testing + hardening | **DONE** | Bhavya | G6 **passed**, CI green | `pytest -q` → 441 passed; see §7 |
 | 7 | Stage 3 readiness | **IN PROGRESS** | All | G7 **not passed** — 4 of 8 scope items done, 3 blocked | [16_STAGE_3_REPORT_DRAFT.md](16_STAGE_3_REPORT_DRAFT.md), [logs/](../logs/README.md) |
 
 ## 3. Completed outputs
@@ -383,15 +383,15 @@ Only points where the metrics changed:
 
 | verified | P(Verified) | R(Verified) | F1 | false-`Verified` | accuracy |
 |---|---|---|---|---|---|
-| 0.30 | 0.643 | 0.900 | 0.750 | **0.357** | 0.667 |
-| 0.36 | 0.692 | 0.900 | 0.783 | 0.308 | 0.708 |
-| 0.57 | 0.800 | 0.800 | 0.800 | 0.200 | 0.667 |
-| 0.59 | 0.889 | 0.800 | 0.842 | 0.111 | 0.708 |
-| **0.63** | **1.000** | **0.800** | **0.889** | **0.000** | **0.708** |
-| 0.70 | 1.000 | 0.700 | 0.824 | 0.000 | 0.667 |
-| 0.80 | 1.000 | 0.400 | 0.571 | 0.000 | 0.500 |
-| 0.85 | 1.000 | 0.100 | 0.182 | 0.000 | 0.375 |
-| 0.87 | 0.000 | 0.000 | 0.000 | 0.000 | 0.333 |
+| 0.30 | 0.600 | 0.923 | 0.727 | **0.400** | 0.676 |
+| 0.45 | 0.750 | 0.923 | 0.828 | 0.250 | 0.706 |
+| 0.57 | 0.846 | 0.846 | 0.846 | 0.154 | 0.676 |
+| 0.59 | 0.917 | 0.846 | 0.880 | 0.083 | 0.706 |
+| **0.63** | **1.000** | **0.846** | **0.917** | **0.000** | 0.706 |
+| 0.70 | 1.000 | 0.769 | 0.870 | 0.000 | 0.676 |
+| 0.80 | 1.000 | 0.462 | 0.632 | 0.000 | 0.588 |
+| 0.85 | 1.000 | 0.077 | 0.143 | 0.000 | 0.441 |
+| 0.87 | 0.000 | 0.000 | 0.000 | 0.000 | 0.412 |
 
 **Chosen: `verified_threshold = 0.63`** — the highest-F1 point with false-`Verified` = 0, the
 correctness-first criterion in
@@ -534,6 +534,52 @@ in `__post_init__`, and the cause is recorded in [08 §7.3](08_DATA_MODELS_AND_A
 pre-generation ordering, the no-content-terms decision, determinism, and the coverage signal in
 isolation) and 8 in `test_hardening.py` (set quality, and four assertions locking the measured rates
 against the real fixture). No existing test was weakened, skipped or deleted.
+
+## 7.6 The antonym branch — R-25 closed
+
+**Phase 7, 2026-10-09.** R-25 was right that the 24-case set contained no antonym pair. Ten cases
+were added from real report passages, and the branch was measured for the first time.
+
+### What the cases found that 31 unit tests could not
+
+`ant_08` and `ant_09` were reported `contradiction_detected` against passages that never mentioned
+the claim's subject. `ant_09` told the user the source contradicted a claim about paid API
+expenditure, when the source was a table row about reducing blind trust that happened to contain the
+word "reduces". A confident, wrong explanation is worse than a missed contradiction, so a subject
+gate was added: an antonym counts only if the claim is about the **sentence carrying it**, with a
+single-sentence exemption so minimal pairs like "It was profitable." / "It was expensive." keep
+firing. [ADR-0015](05_TECH_STACK_AND_ADRS.md#adr-0015--an-antonym-is-only-a-contradiction-if-it-is-about-the-same-thing).
+
+### Measured
+
+| | Before | After |
+|---|---|---|
+| Labelled contradictions detected | 0 of 0 (no cases existed) | **4 of 4** |
+| Non-firings correctly silent | 0 of 0 | **6 of 6** |
+| `ant_08` / `ant_09` reason code | `contradiction_detected` (wrong) | `weak_support` / `no_support` (right) |
+| Accuracy over the labelled set | 0.667 (24 cases) | **0.735** (34 cases) |
+| `Verified` recall | 0.800 | **0.846** |
+| `Verified` F1 | 0.889 | **0.917** |
+| `Verified` precision | 1.000 | 1.000 |
+| False-`Verified` | 0.000 | **0.000** |
+| Chosen threshold | 0.63 | **0.63** |
+
+The threshold did not move. That is a good sign for the calibration and not proof that 0.63 is
+right. All 24 pre-existing cases produce byte-identical results before and after — verified by
+diffing `eval_results.json` against `HEAD`.
+
+### What the gate cannot do
+
+It is a lexical proxy for "about the same thing". A claim and a passage about the same subject in
+entirely different vocabulary are still missed. And it is a decline rule, so it can only remove
+detections — asserted by a test that sweeps 100+ word pairs and checks the guarded result set is a
+subset of the unguarded one.
+
+**Tests added: 12** — 6 on the subject gate in `test_verification.py` (including the subset
+property and the minimal-pair exemption) and 6 in `test_hardening.py` (the labelled set really
+contains antonym pairs, exactly the four fire, all six non-firings decline for a named reason, and
+the two end-to-end label assertions). No existing test weakened; the 6 call sites that used the old
+three-argument `_antonym_conflict` signature were updated to pass passage text.
 
 ## 8. Measurements taken
 
@@ -711,6 +757,7 @@ The equivalents that matter now live in the project:
 | Start the app headless | `streamlit run app.py --server.headless true` |
 
 ## 11. Change log
+| 2026-10-09 | 7 | **R-25 closed: the antonym branch is measured, and a fourth defect falls out.** Ten labelled antonym cases (`ant_01`-`ant_10`) authored from real report passages; four must fire the contradiction check and six must not, each for a different named reason. Measured: **4/4 contradictions detected, 6/6 non-firings silent**. Adding them exposed a defect the 31 unit tests could not see — a claim about *any* subject was reported contradicted if the passage contained an opposite direction word anywhere, so `ant_09` (“The paid API expenditure increased after Stage 2”) was labelled `contradiction_detected` by a table row about blind trust. A false contradiction is worse than a missed one, so a subject gate now requires the claim to be about the sentence holding the antonym, exempting single-sentence passages so minimal pairs still fire; a test asserts the gated result set is a *subset* of the ungarded one over 100+ word pairs. Accuracy **0.667 → 0.735**, `Verified` recall 0.800 → 0.846, F1 0.889 → 0.917, precision 1.000, false-`Verified` 0.000, **threshold still 0.63**. Also documented a reporting trap: the sweep holds `review_threshold` at verified/2, so its accuracy column reads 0.706 against the shipped configuration's 0.735. ADR-0015 added. **441 passed, 6 deselected.** 12 tests added, none weakened |
 | 2026-10-09 | 7 | **R-24 closed: evidence-based abstention.** Audit first, code second. Rejected a floor on `relevance_score` after measuring that answerable and unanswerable cosine ranges overlap (any floor catching most unanswerable questions killed ≥5 of 8 answerable). Shipped `query_coverage` instead — fraction of the question's content words present in the retrieved passages — gated in `ask()` **before generation**, floor `0.50` in `AbstentionConfig`, swept 0.00→1.00 on a new 48-case labelled set (24 answerable naming their page, 24 unanswerable incl. **6 adversarial**). Measured: correct abstention **0.000 → 0.750**, false abstention **0.000**, false-`Verified` on the original 10 questions **15 → 0**, claims emitted on them **50 → 0**, answerable claims **unchanged**. Also: `GeneratedAnswer.notes` silently accepted a bare `str` (UI rendered single letters) — now coerced. **429 passed, 6 deselected.** ADR-0014 added; 14 docs updated; 24 tests added, none weakened |
 
 | Date | Phase | Change |

@@ -274,7 +274,10 @@ def _negations_in_matching_region(text: str, claim_tokens: set[str]) -> set[str]
 
 
 def _antonym_conflict(
-    claim_tokens: set[str], chunk_tokens: set[str], claim_text: str = ""
+    claim_tokens: set[str],
+    chunk_tokens: set[str],
+    claim_text: str = "",
+    evidence_text: str = "",
 ) -> str | None:
     """Return the antonym pair on which the claim and chunk disagree, if any.
 
@@ -294,10 +297,28 @@ def _antonym_conflict(
     that mentions the claim's own direction as well is not contradicting it; it is describing a
     mixed result. So the claim's token must be **absent** from the passage for a conflict to stand.
 
-    This makes the check stricter than the earlier one in two ways at once, and both push toward
-    missing a contradiction rather than inventing one. That is the deliberate direction: a false
-    contradiction flag pushes a correct claim into `Unsupported` and suppresses a citation the user
-    can see is right.
+    **And declines when the opposite word is about something else.** This is the guard added after
+    the labelled set in `tests/data/antonym_cases.jsonl` measured it. "The number of retrieved
+    passages increased during indexing" against a passage whose only "reduces" belongs to "The
+    overlap reduces the chance that a definition is split at a chunk boundary" was reported as
+    `contradiction_detected` -- telling the user the source says the opposite when the source says
+    nothing at all. Which is worse than no check, because it is a confident, wrong explanation.
+
+    So: an opposite direction is only a contradiction if the claim shares vocabulary **with the
+    sentence that carries it**. The subject gate is deliberately narrow, and it is a *decline* rule,
+    so it pushes toward missing a contradiction rather than inventing one -- the same direction every
+    other conservatism in this module takes.
+
+    Narrow matters. A blanket "require N shared words with the contradicting sentence" breaks
+    legitimate minimal pairs: "It was profitable." against "It was expensive." shares no content
+    word at all, yet is plainly a contradiction. Requiring overlap *with the passage as well* is what
+    distinguishes a minimal pair (which shares nothing anywhere) from a subject mismatch (which
+    shares plenty, just not with the sentence holding the antonym).
+
+    This makes the check stricter than the earlier one in three ways at once, and all three push
+    toward missing a contradiction rather than inventing one. That is the deliberate direction: a
+    false contradiction flag pushes a correct claim into `Unsupported` and suppresses a citation the
+    user can see is right.
     """
     if _claim_is_negated(claim_text):
         return None
@@ -309,9 +330,49 @@ def _antonym_conflict(
             # The passage uses this direction too, so it is not asserting the opposite of the claim.
             continue
         shared_opposite = opposites & chunk_tokens
-        if shared_opposite:
-            return f"{token}/{sorted(shared_opposite)[0]}"
+        if not shared_opposite:
+            continue
+        if _subject_gate_applies(claim_tokens, evidence_text, shared_opposite):
+            continue
+        return f"{token}/{sorted(shared_opposite)[0]}"
     return None
+
+
+def _subject_gate_applies(
+    claim_tokens: set[str],
+    evidence_text: str,
+    opposites: set[str],
+) -> bool:
+    """True when the claim is demonstrably about something *else* in the passage.
+
+    The rule: **an opposite direction only contradicts the claim if the claim is about the sentence
+    that carries it** -- unless that sentence is the entire evidence, in which case there is nowhere
+    else for the claim to be about.
+
+    That exception is what keeps legitimate minimal pairs working. "It was profitable." against
+    "It was expensive." shares no content word at all, yet it is plainly a contradiction, and the
+    passage is one sentence long. Demanding lexical overlap there would suppress a real detection.
+
+    Without the exception the rule also over-fires in the other direction: "The paid API expenditure
+    increased after Stage 2" against a 300-character window about reproducibility and blind trust
+    was reported as `contradiction_detected`, because the passage happened to contain "reduces" in
+    an unrelated clause. Telling a user the source says the opposite when the source says nothing at
+    all is worse than saying nothing, because it is a confident and wrong explanation.
+
+    Returns ``False`` -- do not block -- whenever the gate cannot be evaluated: no passage text, or
+    no opposite word to locate.
+    """
+    if not evidence_text or not opposites:
+        return False
+    sentences = split_sentences(evidence_text)
+    if len(sentences) <= 1:
+        # The whole evidence is the contradicting sentence, so the claim is necessarily about it.
+        return False
+    for sentence in sentences:
+        sentence_tokens = content_tokens(sentence)
+        if sentence_tokens & opposites and (claim_tokens & sentence_tokens):
+            return False
+    return True
 
 
 def _claim_is_negated(text: str) -> bool:
@@ -405,7 +466,7 @@ class Verifier:
         claim_tokens = content_tokens(claim_text)
         chunk_tokens = content_tokens(evidence_text)
         if config.check_contradiction:
-            conflict = _antonym_conflict(claim_tokens, chunk_tokens, claim_text)
+            conflict = _antonym_conflict(claim_tokens, chunk_tokens, claim_text, evidence_text)
             if conflict is not None:
                 left, right = conflict.split("/")
                 return ClaimVerification(
