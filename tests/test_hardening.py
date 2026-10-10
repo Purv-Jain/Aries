@@ -428,21 +428,30 @@ class TestAntonymBranchIsMeasured:
         )
 
     @needs_fixture
-    def test_the_four_contradictions_are_labelled_unsupported_end_to_end(self) -> None:
-        """The branch's output as the pipeline reports it, not as the helper returns it."""
+    def test_the_four_contradictions_are_labelled_unsupported_end_to_end(
+        self, tmp_path: Path
+    ) -> None:
+        """The branch's output as the pipeline reports it, not as the helper returns it.
+
+        The scratch JSON goes to `tmp_path`, never to `tests/data/`. Writing it beside the
+        committed artefacts meant an unlink that intermittently raised `PermissionError` on
+        Windows when the writing process had not fully released the handle — a failure in the
+        harness, not in the code under test.
+        """
         import subprocess
 
+        scratch = tmp_path / "antonym_eval.json"
+
         fresh = subprocess.run(
-            [sys.executable, "-X", "utf8", "tools/evaluate.py", "--json",
-             str(RESULTS_PATH.with_name("_antonym_tmp.json"))],
+            [sys.executable, "-X", "utf8", "tools/evaluate.py", "--json", str(scratch)],
             cwd=str(PROJECT_ROOT), capture_output=True, text=True, encoding="utf-8",
             errors="replace", timeout=900,
         )
         assert fresh.returncode == 0, fresh.stderr[-2000:]
         try:
-            results = json.loads(RESULTS_PATH.with_name("_antonym_tmp.json").read_text("utf-8"))
+            results = json.loads(scratch.read_text("utf-8"))
         finally:
-            RESULTS_PATH.with_name("_antonym_tmp.json").unlink(missing_ok=True)
+            scratch.unlink(missing_ok=True)
 
         rows = {row["case_id"]: row for row in results["per_case"]}
         for case_id in ("ant_01", "ant_02", "ant_03", "ant_04"):
@@ -452,21 +461,24 @@ class TestAntonymBranchIsMeasured:
             assert row["passed"] is True, f"{case_id}: {row}"
 
     @needs_fixture
-    def test_no_case_outside_the_four_is_reported_as_an_antonym_contradiction(self) -> None:
+    def test_no_case_outside_the_four_is_reported_as_an_antonym_contradiction(
+        self, tmp_path: Path
+    ) -> None:
         """The false positive is the thing that must not come back."""
         import subprocess
 
+        scratch = tmp_path / "antonym_eval.json"
+
         fresh = subprocess.run(
-            [sys.executable, "-X", "utf8", "tools/evaluate.py", "--json",
-             str(RESULTS_PATH.with_name("_antonym_tmp2.json"))],
+            [sys.executable, "-X", "utf8", "tools/evaluate.py", "--json", str(scratch)],
             cwd=str(PROJECT_ROOT), capture_output=True, text=True, encoding="utf-8",
             errors="replace", timeout=900,
         )
         assert fresh.returncode == 0, fresh.stderr[-2000:]
         try:
-            results = json.loads(RESULTS_PATH.with_name("_antonym_tmp2.json").read_text("utf-8"))
+            results = json.loads(scratch.read_text("utf-8"))
         finally:
-            RESULTS_PATH.with_name("_antonym_tmp2.json").unlink(missing_ok=True)
+            scratch.unlink(missing_ok=True)
 
         rows = {row["case_id"]: row for row in results["per_case"]}
         for case_id in ("ant_08", "ant_09", "ant_10"):
@@ -822,13 +834,71 @@ class TestMetricsArePresent:
         assert recall["n_questions"] >= 5
         assert recall["method"]
 
-    def test_the_unmeasured_model_load_is_declared_unmeasured(self) -> None:
-        """The one metric that cannot be produced here must say so rather than be absent."""
+    def test_model_load_reports_honestly_either_way(self) -> None:
+        """M8 must never be absent, and must never claim a measurement it did not take.
+
+        **This test previously asserted `measured is False`,** which was true for six phases
+        because no weights were on the machine. When they arrived, M8 became a real measurement and
+        the assertion failed. Weakening it to `assert "measured" in load` would have thrown away
+        the property worth keeping, so it is rewritten as the invariant behind the original intent:
+
+        * no weights -> M8 says `measured: False` **and gives a reason**, and carries no figures;
+        * weights present -> M8 says `measured: True`, and every figure is a real number of the
+          right magnitude. A fabricated 0.0 or a copied-from-the-docs value fails here.
+
+        Which is the stronger test. The old one could only ever pass in one world.
+        """
         if not METRICS_PATH.exists():
             pytest.skip("tools/measure.py has not been run on this machine")
         load = json.loads(METRICS_PATH.read_text("utf-8"))["M8_model_load"]
-        assert load["measured"] is False
-        assert load["reason"]
+
+        assert "measured" in load, "M8 must declare whether it was measured at all"
+
+        if load["measured"] is False:
+            assert load["reason"], "an unmeasured metric must say why it is unmeasured"
+            # No figure may sit in an unmeasured block pretending to be a result.
+            assert not [k for k in load if k.endswith(("_seconds", "_ms", "_dimension"))]
+            return
+
+        assert load["measured"] is True
+        assert load["device"] == "cpu" or load["cuda_available"] is True
+        assert load["minilm_embedding_dimension"] == 384
+        # Real measured seconds. A zero or a placeholder would mean nobody actually loaded a model.
+        for key in ("minilm_load_seconds", "minilm_embed_one_sentence_ms",
+                    "flan_t5_tokenizer_load_seconds", "flan_t5_model_load_seconds",
+                    "flan_t5_greedy_generate_seconds"):
+            assert key in load, f"M8 claims to be measured but omits {key}"
+            assert isinstance(load[key], (int, float))
+            assert load[key] > 0.0, f"{key} is {load[key]}; a real load is never zero"
+        assert load["minilm_load_seconds"] > load["minilm_embed_one_sentence_ms"] / 1000
+        assert load["weights_on_disk_mb"], "measured weights must be somewhere on disk"
+        assert any(v > 50 for v in load["weights_on_disk_mb"].values()), (
+            "the reported on-disk size is too small to be a real model"
+        )
+
+    def test_the_semantic_comparison_is_reported_or_says_why_not(self) -> None:
+        """Phase 8 added a MiniLM-vs-TF-IDF retrieval comparison. Same honesty rule applies."""
+        if not METRICS_PATH.exists():
+            pytest.skip("tools/measure.py has not been run on this machine")
+        semantic = json.loads(METRICS_PATH.read_text("utf-8"))["M1_recall_semantic_profile"]
+
+        assert "measured" in semantic
+        if semantic["measured"] is False:
+            assert semantic["reason"]
+            return
+
+        assert semantic["n_questions"] >= 5
+        for profile in ("tfidf", "minilm"):
+            block = semantic[profile]
+            for k in (1, 3, 5, 10):
+                assert 0.0 <= block[f"recall@{k}"] <= 1.0
+            assert 0.0 <= block["mrr"] <= 1.0
+            assert block["query_p50_ms"] > 0
+        # The whole point is that the comparison is stated whichever way it came out.
+        assert set(semantic["minilm_beats_tfidf"]) == {
+            "recall@1", "recall@3", "recall@5", "recall@10", "mrr"
+        }
+        assert semantic["interpretation"]
 
 
 # --------------------------------------------------------------------------

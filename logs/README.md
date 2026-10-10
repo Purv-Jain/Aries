@@ -18,11 +18,12 @@ Intel64 Family 6 Model 154, 8 logical CPUs, CPython 3.14.6, no GPU, `.venv` with
 | 06 | [06_ui_headless.txt](06_ui_headless.txt) | `streamlit run app.py --server.headless true --server.port=8611`, then two HTTP requests | Root `status=200 len=6463`, `_stcore/health` → `ok`, `traceback present: False` |
 | 07 | [07_abstention_q1.txt](07_abstention_q1.txt) | `run_demo.py --question "What is the boiling point of mercury?"` | **R-24 before/after, question 1 of 3.** The question is not in the corpus; the system answered anyway |
 | 08 | [08_abstention_q2.txt](08_abstention_q2.txt) | `run_demo.py --question "Who won the 2019 Cricket World Cup?"` | **R-24, question 2 of 3.** Five claims, all `Verified` at support 1.00 |
+| 10 | [10_semantic_suite.txt](10_semantic_suite.txt) | `pytest -q -m semantic` with the weights fetched (`HF_HUB_DISABLE_XET=1`) | **6 passed**, 11–81 s on CPU. First run was 2 passed / 4 failed: `embed_query` returned a 1-D array, `similarity()` handed it to sklearn, and every semantic query raised. Fixed and guarded by 7 weights-free tests |
 | 09 | [09_abstention_q3.txt](09_abstention_q3.txt) | `run_demo.py --question "How does photosynthesis convert light energy into chemical energy?"` | **R-24, question 3 of 3** |
 
 ## The three logs that matter most
 
-**02** is the reproducibility claim. 429 tests, no network, no model download, on a machine whose only
+**02** is the reproducibility claim. 449 tests, no network, no model download, on a machine whose only
 Python is the pinned one.
 
 **04 and 05** are the measurement claim. Every number in the Stage 3 report appears here first.

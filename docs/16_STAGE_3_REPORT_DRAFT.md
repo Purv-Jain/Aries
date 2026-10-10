@@ -200,23 +200,58 @@ support score and retrieval relevance as **separately labelled rows**.
 
 ## 10. Testing
 
-**441 tests, 441 passed, 0 failed, 0 skipped, 0 xfailed.** Captured output:
+**449 tests, 449 passed, 0 failed, 0 skipped, 0 xfailed**, plus the 6 `semantic` tests passing separately. Captured output:
 [logs/02_test_suite_offline.txt](../logs/02_test_suite_offline.txt).
 
 | Suite | Tests | Covers |
 |---|---|---|
 | `test_core.py` | 64 | ingestion, limits, chunking, ID contracts, security |
-| `test_retrieval.py` | 80 | embeddings, stores, retrieval, persistence, degradation |
+| `test_retrieval.py` | 87 | embeddings, stores, retrieval, persistence, degradation |
 | `test_verification.py` | 136 | generation, verification, abstention, antonym subject gate, injection defence |
 | `test_ui.py` | 98 | renders, states, inspector, contrast, no-placeholder audit |
-| `test_hardening.py` | 63 | evaluation integrity, calibration, **abstention-gate and antonym-branch measurement**, security sweep, determinism, metrics, CLI, cross-platform paths, CI config |
+| `test_hardening.py` | 64 | evaluation integrity, calibration, **abstention-gate and antonym-branch measurement**, security sweep, determinism, metrics, CLI, cross-platform paths, CI config |
 
 All 17 mandated edge cases and all 20 contract tests are covered.
 
-**The six deselected tests have never been run.** They carry the `semantic` marker and require
-MiniLM and FLAN-T5 weights, which are absent from this machine. They are written and collectable —
-pytest confirming it found them is what "6 deselected" means — but their result is **unmeasured**, and
-this report claims nothing about them.
+**The six `semantic`-marked tests were run on 2026-10-10 and all six pass** — 38.4 s on CPU. They
+needed `HF_HUB_DISABLE_XET=1`, because the default Hugging Face transport stalled indefinitely on
+this network while a plain ranged HTTP request for the same file ran at 1.29 MB/s. Their **first**
+run was 2 passed and 4 failed, and that is the more interesting fact.
+
+**The semantic retrieval path had never worked.** `embed_query` returns a 1-D `(384,)` array while
+`similarity()` passed it straight to `sklearn.metrics.pairwise.cosine_similarity`, which rejects it.
+Every semantic query raised `ValueError: Expected 2D array, got 1D array instead`. Six phases of
+green tests missed it because the six tests that would have caught it are deselected whenever the
+weights are absent — which is every run, including every CI run — and because the TF-IDF backend
+returns a sparse `(1, n)` matrix and never trips the same line. All 448 offline tests passed
+throughout. The fix is one reshape, guarded by **seven regression tests that need no weights**, so
+CI catches it next time even though CI has no model.
+
+### 11.4b What the semantic profile is actually worth
+
+Measured on the same 9 hand-authored questions and the same 15-page report:
+
+| | TF-IDF | MiniLM | MiniLM better? |
+|---|---|---|---|
+| Recall@1 | 0.667 | 0.667 | **no** |
+| Recall@3 | **1.000** | 0.889 | **no** |
+| Recall@5 / @10 | 1.000 | 1.000 | no |
+| MRR | 0.778 | **0.806** | yes |
+| Retrieval p50 | ~2 ms | ~31 ms | — |
+| Full `ask()` p50 | ~12–37 ms | ~494 ms | — |
+| Peak RSS | **192.6 MB** | 589.3 MB | — |
+| Model load | 0 s | 5.48 s (MiniLM) | — |
+
+Identical at Recall@1, **worse** at Recall@3, marginally better at MRR, for roughly 15x the
+retrieval latency and 3x the memory. The question it lost is instructive: *“How large is the
+FLAN-T5-small weight file?” — TF-IDF puts page 9 first on a lexical anchor, MiniLM ranks it
+fourth, because the size is stated in a table and there is no semantic relationship between
+“large” and “308 MB”.
+
+This is the **measured** justification for the project's central design decision, which until now
+was an argument rather than a result. Nine questions against one document cannot settle MiniLM
+versus TF-IDF in general, and nothing here claims they do; but on the evidence this project actually
+measured, the offline profile should be the default and the semantic profile should stay optional.
 
 **Offline is proven by construction, not by environment variable.** One test replaces
 `socket.connect` and `socket.create_connection` with a function that *raises*, then runs a full

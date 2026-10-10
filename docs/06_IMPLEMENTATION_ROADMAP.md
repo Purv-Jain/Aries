@@ -233,7 +233,7 @@ Two honest qualifications:
    honest about the limit of its reach — a real finding for the report, not a bug to be papered over
    with an easier example. The semantic profile would plausibly follow the second; measuring that is
    Phase 6 work.
-2. **The 6 `semantic`-marked tests were not run.** MiniLM and FLAN-T5 weights are absent. Their
+2. ~~**The 6 `semantic`-marked tests were not run.**~~ **They were run on 2026-10-10 and all 6 passed**, after fixing a 1-D/2-D query defect that had made every semantic query raise. MiniLM and FLAN-T5 weights were absent at the time. Their
    result is **unmeasured**.
 
 ## 6. Phase 5 — Premium UI

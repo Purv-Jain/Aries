@@ -2,7 +2,7 @@
 
 **Status:** Phase 7 in progress — built, tested, calibrated, measured, and the Stage 3 report drafted.
 **Current gate:** `PHASE 7 ACTIVE — GATE G7 NOT YET PASSED`
-**Tests:** `pytest -q` → **441 passed, 6 deselected**, 0 failures (2026-10-09)
+**Tests:** `pytest -q` → **449 passed, 6 deselected**, 0 failures; the 6 `semantic` tests **pass too** — 449 + 6 = 455 (2026-10-10)
 **Run it:** `streamlit run app.py`
 **Last updated:** 2026-10-08
 
@@ -204,13 +204,12 @@ nothing depends on colour alone. Full spec in
    network and no model download.
 6. **Phase gates are real.** Do not start Phase N+1 work without an explicit
    `APPROVE PHASE N` instruction.
-7. **"Measured" is not "written".** The semantic-profile tests exist and are deselected by default;
-   they have never been run because the weights are absent. They are not passing.
-8. **CI is green, and it took a real fix.** The `ubuntu-latest` job failed because three paths
-   were built from Windows-style string literals. On POSIX a backslash is an ordinary filename
-   character, so the expression resolves to a *single long filename* — the evaluation tests then
-   raised `FileNotFoundError` instead of skipping. Found via PR #1, fixed, and now guarded by a
-   test that fails on any reintroduction. Verified on run 37880879892: ubuntu, windows and the
+7. **"Measured" is not "written".** The semantic-profile tests were deselected for six phases,
+   which meant a defect in the semantic retrieval path went uncaught for six phases too:
+   `embed_query` returned a 1-D array, `similarity` handed it to sklearn, and **every semantic
+   query raised**. All 448 offline tests passed throughout, because the tests that would have
+   caught it need weights that CI does not have. They have now been run — 6 passed, after the fix —
+   and the guard for it runs **without** weights so CI catches it next time.
    security sweep all pass.
 9. **Report the bad results, and fix them when they are fixable.** Abstention measured 0.000 (R-24).
    It is now 0.750 correct with 0.000 false, and the six adversarial misses are named in
@@ -224,8 +223,9 @@ nothing depends on colour alone. Full spec in
 python -m venv .venv
 .venv\Scripts\activate                      # Windows
 pip install -r requirements.txt             # verified working on CPython 3.14.6
-pytest -q                                   # 441 passed, 6 deselected as of 2026-10-09
-pytest -q -m semantic                       # needs MiniLM + FLAN-T5 weights; never run yet
+pytest -q                                   # 449 passed, 6 deselected as of 2026-10-10
+pytest -q -m semantic                     # 6 passed, once the weights are fetched (see below)
+HF_HUB_DISABLE_XET=1                        # required once: the default transport stalls here
 streamlit run app.py                        # the application
 python run_demo.py --pdf <path>             # CLI: index -> ask -> verify, exit 0/1/2
 python tools/evaluate.py --sweep            # score the labelled set AND sweep the threshold
@@ -237,7 +237,7 @@ python tools/measure.py --pdf <path>        # latency, Recall@k, RAM, determinis
 repository** (B-07). Without it they skip rather than fail.
 
 Use the pinned interpreter. `C:\Python314\python.exe` happens to have most of the stack, but the
-**verified** environment is `.venv`, and that is where all 441 passing tests were observed.
+**verified** environment is `.venv`, and that is where all 449 passing tests were observed.
 
 ## Licence and attribution
 

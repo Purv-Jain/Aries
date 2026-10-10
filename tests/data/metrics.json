@@ -12,16 +12,16 @@
     "runs": 3,
     "pages": 15,
     "chunks": 46,
-    "seconds_min": 0.3767,
-    "seconds_median": 0.3787,
-    "seconds_max": 0.3839,
-    "seconds_per_100_pages": 2.5244
+    "seconds_min": 0.5223,
+    "seconds_median": 0.5929,
+    "seconds_max": 0.9052,
+    "seconds_per_100_pages": 3.9524
   },
   "M6_query_latency_offline": {
     "n": 27,
-    "p50_ms": 15.23,
-    "p95_ms": 25.78,
-    "max_ms": 26.95
+    "p50_ms": 13.41,
+    "p95_ms": 19.91,
+    "max_ms": 26.11
   },
   "M1_recall": {
     "n_questions": 9,
@@ -41,16 +41,42 @@
     "flan_t5_marker_coverage": "not measured \u2014 FLAN-T5 weights absent"
   },
   "M4_abstention": {
-    "n_unanswerable": 3,
-    "abstentions": 0,
-    "abstention_rate": 0.0,
-    "fabrications_on_abstention": 0,
-    "n_answerable": 9,
+    "labelled_cases": 48,
+    "n_unanswerable": 24,
+    "n_answerable": 24,
+    "correct_abstentions": 18,
+    "correct_abstention_rate": 0.75,
+    "clear_unanswerable": {
+      "n": 18,
+      "correct": 18,
+      "missed": [],
+      "rate": 1.0
+    },
+    "adversarial_unanswerable": {
+      "n": 6,
+      "correct": 0,
+      "missed": [
+        "unans_19",
+        "unans_20",
+        "unans_21",
+        "unans_22",
+        "unans_23",
+        "unans_24"
+      ],
+      "rate": 0.0,
+      "note": "These name concepts the corpus does contain (MiniLM, Chroma, retrieval, stage) while asking for a fact it never states. A lexical gate cannot separate them from answerable questions, and the report says so rather than excluding them."
+    },
     "false_abstentions": 0,
     "false_abstention_rate": 0.0,
-    "mean_support_on_unanswerable": 0.59,
-    "n_claims_on_unanswerable": 9,
-    "interpretation": "The offline profile does not abstain when the retrieved passages do not answer the question: it quotes the least-irrelevant sentence it can find and labels that claim Unsupported, which is honest labelling attached to an answer that should not exist. The abstention path that is implemented and tested -- an empty index -- works. This is a known, measured limitation, recorded as R-24, not a fixed defect."
+    "false_abstention_case_ids": [],
+    "answered_when_unanswerable": 6,
+    "unsupported_answer_rate": 0.25,
+    "false_verified_claims_on_unanswerable": 10,
+    "false_verified_claims_on_clear": 0,
+    "false_verified_claims_on_adversarial": 10,
+    "fabrications_on_abstention": 0,
+    "citation_resolution_rate_on_answered": 1.0,
+    "interpretation": "The gate refuses before generating, so a refused question produces no claims at all rather than claims that are honestly labelled Unsupported. Every clear out-of-corpus question is refused. The adversarial cases are not: their vocabulary overlaps the corpus even though the fact asked for is absent, which is the limit of a lexical signal with no entailment model behind it. No false abstentions on the 24 answerable questions, which is the trade this threshold was chosen for."
   },
   "M9_determinism": {
     "runs": 5,
@@ -62,17 +88,80 @@
     "semantic": "not measured \u2014 MiniLM weights absent"
   },
   "M7_peak_rss": {
-    "peak_rss_mb": 191.1,
-    "baseline_rss_mb": 189.6,
-    "growth_mb": 1.5,
+    "peak_rss_mb": 192.6,
+    "baseline_rss_mb": 191.2,
+    "growth_mb": 1.4,
     "samples": 11,
     "readable_samples": 11,
     "sampling_note": "read after indexing and after each of the relevance-set queries; not a background thread, so a spike inside a single call would be missed. The peak here is the whole process including the interpreter, not the pipeline's own footprint."
   },
   "M8_model_load": {
-    "measured": false,
-    "reason": "No model weights are present on this machine, so no model is ever loaded.",
-    "expected_note": "MiniLM (~90 MB) would dominate first-query latency; FLAN-T5-small (~308 MB) would dominate it further. Neither figure is measured and neither may be quoted."
+    "measured": true,
+    "device": "cpu",
+    "cuda_available": false,
+    "torch": "2.13.0+cpu",
+    "torch_threads": 6,
+    "minilm_load_seconds": 0.14,
+    "minilm_embed_one_sentence_ms": 20.6,
+    "minilm_embedding_dimension": 384,
+    "flan_t5_tokenizer_load_seconds": 0.26,
+    "flan_t5_model_load_seconds": 0.19,
+    "flan_t5_greedy_generate_seconds": 0.681,
+    "weights_on_disk_mb": {
+      "google--flan-t5-small": 311.1,
+      "sentence-transformers--all-MiniLM-L6-v2": 91.6
+    },
+    "note": "Single run on CPU, no GPU. Each figure is one measurement, not an average, and the first load in a fresh process also pays for a cold page cache."
   },
-  "elapsed_seconds": 5.88
+  "M1_recall_semantic_profile": {
+    "measured": true,
+    "n_questions": 9,
+    "tfidf": {
+      "query_p50_ms": 0.86,
+      "recall@1": 0.667,
+      "recall@3": 1.0,
+      "recall@5": 1.0,
+      "recall@10": 1.0,
+      "mrr": 0.778,
+      "ranks": [
+        1,
+        1,
+        1,
+        3,
+        1,
+        3,
+        1,
+        3,
+        1
+      ]
+    },
+    "minilm": {
+      "query_p50_ms": 23.29,
+      "recall@1": 0.667,
+      "recall@3": 0.889,
+      "recall@5": 1.0,
+      "recall@10": 1.0,
+      "mrr": 0.806,
+      "ranks": [
+        2,
+        4,
+        1,
+        1,
+        1,
+        1,
+        1,
+        2,
+        1
+      ]
+    },
+    "minilm_beats_tfidf": {
+      "recall@1": false,
+      "recall@3": false,
+      "recall@5": false,
+      "recall@10": false,
+      "mrr": true
+    },
+    "interpretation": "On this fixture MiniLM does not beat TF-IDF: the same Recall@1, a worse Recall@3, and a marginally better MRR, for roughly 40x the query latency and about 3x the resident memory. Nine hand-authored questions against one document cannot settle the general comparison, and this is not offered as such. It is offered as the measured reason the offline profile is the default."
+  },
+  "elapsed_seconds": 20.25
 }

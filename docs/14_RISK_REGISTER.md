@@ -64,7 +64,7 @@ Status: `OPEN` · `MITIGATING` · `MONITOR` · `CLOSED` · `ACCEPTED` (conscious
 | A-03 | Chroma HNSW is approximate | Fine for this scale; determinism is guaranteed on the offline profile only, and that is stated. |
 | A-04 | No OCR | Explicitly out of scope in Stage 2. Clear user-facing limitation message instead. |
 | A-05 | English-first | Explicitly out of scope in Stage 1. |
-| A-06 | Semantic profile is unmeasured | No MiniLM or FLAN-T5 weights on this machine. The code is written and the *degradation* paths are tested, but its latency, Recall@k and memory figures do not exist. Any number for them would be invented, so §8.4 of the tracker lists them as explicitly not measured. |
+| A-06 | ~~Semantic profile is unmeasured~~ **CLOSED 2026-10-10** | Weights fetched; the 6 tests run and pass. MiniLM measured and it did **not** beat TF-IDF on this fixture. Residual: the semantic *verification* path is still unmeasured end to endion* paths are tested, but its latency, Recall@k and memory figures do not exist. Any number for them would be invented, so §8.4 of the tracker lists them as explicitly not measured. |
 | A-07 | Determinism claim excludes timings | Byte-identity holds for answer, claims, retrievals, verifications, summary and warnings — not for the five wall-clock timings, which differ by construction. Both the first (0.2) and corrected (1.000) figures are recorded so the change of method is visible. |
 
 ## 5. Risk review cadence

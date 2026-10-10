@@ -409,7 +409,7 @@ Ticked means a command was run and its output observed. Unticked means it did no
 | 5 | UI-1, UI-2 automated; UI-3 → UI-6 labelled manual | **done** — UI-1/UI-2 automated and green; UI-3, UI-4, UI-5 remain **manual and unrun** (R-23) |
 | 6 | Full offline run with the network genuinely disabled | **done, and stronger than planned.** `socket.connect` and `socket.create_connection` were replaced by a function that *raises*, then a full index→ask→verify cycle ran to completion. Relying on env vars alone would only have shown that the code respects them |
 | 7 | Determinism byte-comparison passing | **done** — 5/5 runs byte-identical for answer, claims, retrievals, verifications, summary, warnings. Wall-clock timings excluded by construction, and both the 0.2 and 1.000 figures are recorded |
-| 8 | Semantic subset run and result recorded honestly | **not run, and recorded as such.** `pytest -q -m semantic` has never been executed. 6 tests collect and are deselected in every run |
+| 8 | Semantic subset run and result recorded honestly | **DONE 2026-10-10 — 6 passed**, 11–81 s on CPU. First run was 2 passed / 4 failed: `embed_query` returned a 1-D array that `similarity()` passed straight to sklearn, so **every semantic query raised**. Fixed, and guarded by 7 tests that need no weights so CI catches it. Recorded result: **MiniLM did not beat TF-IDF** on this fixture | been executed. 6 tests collect and are deselected in every run |
 | 9 | Real output pasted into the evidence tracker | **done** — [12 §6.1](12_STAGE_3_EVIDENCE_TRACKER.md#61-full-suite-runs) carries all 13 runs |
 | 10 | Every skip, xfail, and "not measured" item listed with a reason | **done** — 0 skipped, 0 xfailed; 6 deselected; 4 metrics explicitly not measured (§8.4 of the tracker) |
 

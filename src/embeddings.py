@@ -230,11 +230,28 @@ class MiniLMEmbeddingBackend:
         Raw cosine on normalised embeddings is nearly always non-negative but not
         guaranteed to be, and a negative relevance score would be nonsense to a user
         and would break `RetrievalResult`'s `[0, 1]` invariant.
+
+        **The query is reshaped to a single row first, and that is a bug fix rather than
+        tidiness.** `embed_query` returns `embed_documents([text])[0]`, which is a *1-D*
+        `(384,)` array, while `embed_documents` returns a 2-D `(n, 384)` matrix.
+        `sklearn.metrics.pairwise.cosine_similarity` rejects a 1-D input outright, so every
+        semantic query raised `ValueError: Expected 2D array, got 1D array instead`.
+
+        The semantic retrieval path had therefore never worked, and nothing said so: the
+        six `semantic`-marked tests were deselected on every run because the weights were
+        absent, and the TF-IDF profile -- which returns a sparse `(1, n)` matrix from
+        `embed_query` and so never trips this -- passed all 441 offline tests throughout.
+        A defect can be invisible for exactly as long as nobody runs the path that contains it.
+
+        Both 1-D and 2-D queries are accepted, so callers do not have to know which they hold.
         """
         matrix = np.asarray(stored_vectors, dtype=np.float32)
         if matrix.size == 0:
             return np.zeros(0, dtype=np.float64)
-        raw = cosine_similarity(np.asarray(query_vector, dtype=np.float32), matrix).ravel()
+        query = np.asarray(query_vector, dtype=np.float32)
+        if query.ndim == 1:
+            query = query.reshape(1, -1)
+        raw = cosine_similarity(query, np.atleast_2d(matrix)).ravel()
         return np.clip((raw + 1.0) / 2.0, 0.0, 1.0)
 
 

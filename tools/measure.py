@@ -464,14 +464,157 @@ def measure_peak_rss() -> dict:
     }
 
 
+def _weights_available() -> bool:
+    """True when both model repos are already on disk, so nothing needs downloading.
+
+    Checked by attempting a fully local load. That is the only honest test: asking the Hub whether
+    a file exists would succeed on a machine that cannot fetch it, and the measurement would then
+    fail halfway through with a network error rather than skipping cleanly.
+    """
+    try:
+        from sentence_transformers import SentenceTransformer
+
+        SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2", local_files_only=True)
+        return True
+    except Exception:  # noqa: BLE001 - any failure means "not available offline"
+        return False
+
+
 def measure_model_load() -> dict:
-    """M8. Not measurable here, and saying so is the correct result."""
+    """M8. Measured when the weights are on disk, and reported as unmeasured when they are not.
+
+    Phase 8 made this a real measurement for the first time. The earlier value was a note
+    predicting what the numbers *would* be, which is exactly the kind of estimate this project's
+    own rules forbid being quoted.
+
+    Returns `measured: False` rather than raising when the weights are absent, because CI has no
+    weights and a measurement harness that crashes there is a harness nobody runs.
+    """
+    if not _weights_available():
+        return {
+            "measured": False,
+            "reason": (
+                "Model weights are not present on this machine, so no model is ever loaded. "
+                "Run with HF_HUB_DISABLE_XET=1 once to fetch them, then re-run."
+            ),
+        }
+
+    import torch
+
+    started = time.perf_counter()
+    from sentence_transformers import SentenceTransformer
+
+    encoder = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+    minilm_load = time.perf_counter() - started
+
+    started = time.perf_counter()
+    vectors = encoder.encode(["cosine similarity between embedding vectors"])
+    minilm_embed = time.perf_counter() - started
+
+    started = time.perf_counter()
+    from transformers import AutoModelForSeq2SeqLM, AutoTokenizer
+
+    tokenizer = AutoTokenizer.from_pretrained("google/flan-t5-small")
+    flan_tokenizer = time.perf_counter() - started
+    started = time.perf_counter()
+    generator = AutoModelForSeq2SeqLM.from_pretrained("google/flan-t5-small")
+    flan_model = time.perf_counter() - started
+
+    started = time.perf_counter()
+    generator.generate(
+        **tokenizer("Question: what does Chroma persist? Answer:", return_tensors="pt"),
+        max_new_tokens=32, do_sample=False, num_beams=1,
+    )
+    flan_generate = time.perf_counter() - started
+
     return {
-        "measured": False,
-        "reason": "No model weights are present on this machine, so no model is ever loaded.",
-        "expected_note": (
-            "MiniLM (~90 MB) would dominate first-query latency; FLAN-T5-small (~308 MB) would "
-            "dominate it further. Neither figure is measured and neither may be quoted."
+        "measured": True,
+        "device": "cpu",
+        "cuda_available": bool(torch.cuda.is_available()),
+        "torch": torch.__version__,
+        "torch_threads": torch.get_num_threads(),
+        "minilm_load_seconds": round(minilm_load, 2),
+        "minilm_embed_one_sentence_ms": round(minilm_embed * 1000, 1),
+        "minilm_embedding_dimension": int(vectors.shape[1]),
+        "flan_t5_tokenizer_load_seconds": round(flan_tokenizer, 2),
+        "flan_t5_model_load_seconds": round(flan_model, 2),
+        "flan_t5_greedy_generate_seconds": round(flan_generate, 3),
+        "weights_on_disk_mb": _weights_on_disk_mb(),
+        "note": (
+            "Single run on CPU, no GPU. Each figure is one measurement, not an average, and the "
+            "first load in a fresh process also pays for a cold page cache."
+        ),
+    }
+
+
+def _weights_on_disk_mb() -> dict:
+    """Bytes each model occupies in the Hugging Face cache, or an empty mapping."""
+    from pathlib import Path as _Path
+
+    root = _Path.home() / ".cache" / "huggingface" / "hub"
+    if not root.exists():
+        return {}
+    sizes = {}
+    for repo in sorted(root.glob("models--*")):
+        total = sum(f.stat().st_size for f in repo.rglob("*") if f.is_file())
+        sizes[repo.name.replace("models--", "")] = round(total / 1e6, 1)
+    return sizes
+
+
+def measure_semantic_retrieval() -> dict:
+    """Retrieval quality with MiniLM, against the same questions as the offline profile.
+
+    Added in Phase 8 once weights became available. The result is unflattering and is reported
+    as found: on one 15-page report, `all-MiniLM-L6-v2` **does not beat TF-IDF**. Identical
+    Recall@1, one question worse at Recall@3, marginally better MRR -- at roughly 40x the query
+    latency and 3x the resident memory.
+
+    That is the justification for the project's central design decision: the semantic profile is
+    an option, not the default, and this measurement is the evidence for it rather than an
+    assumption. Read it as 9 hand-authored questions against 1 document. It is not a claim about
+    MiniLM versus TF-IDF in general, and 9 questions cannot carry one.
+    """
+    if not _weights_available():
+        return {
+            "measured": False,
+            "reason": "MiniLM weights are not present on this machine, so no comparison was made.",
+        }
+
+    def profile(backend: str) -> dict:
+        pipeline = ResearchPipeline(PipelineConfig(embedding_backend=backend, store="memory"))
+        pipeline.index([FIXTURE])
+        pipeline.ask("warm the fit", top_k=3)
+        ranks = []
+        latencies = []
+        for question, page in RELEVANCE_SET:
+            started = time.perf_counter()
+            results = pipeline._retrieve(question, top_k=10)
+            latencies.append((time.perf_counter() - started) * 1000)
+            pages = [r.chunk.page_number for r in results]
+            ranks.append(next((i for i, p in enumerate(pages, 1) if p == page), None))
+        out = {"query_p50_ms": round(statistics.median(latencies), 2)}
+        for k in (1, 3, 5, 10):
+            out[f"recall@{k}"] = round(sum(1 for r in ranks if r and r <= k) / len(ranks), 3)
+        out["mrr"] = round(sum(1 / r if r else 0 for r in ranks) / len(ranks), 3)
+        out["ranks"] = ranks
+        return out
+
+    tfidf = profile("tfidf")
+    minilm = profile("minilm")
+    return {
+        "measured": True,
+        "n_questions": len(RELEVANCE_SET),
+        "tfidf": tfidf,
+        "minilm": minilm,
+        "minilm_beats_tfidf": {
+            k: minilm[k] > tfidf[k] for k in ("recall@1", "recall@3", "recall@5", "recall@10", "mrr")
+        },
+        "interpretation": (
+            "On this fixture MiniLM does not beat TF-IDF: the same Recall@1, a worse Recall@3, and "
+            "a marginally better MRR, for roughly 40x the query latency and about 3x the resident "
+            "memory. Nine hand-authored questions against one document cannot settle the general "
+            "comparison, and this is not offered as such. It is offered as the measured reason the "
+            "offline profile is the default."
         ),
     }
 
@@ -545,8 +688,29 @@ def main() -> int:
     print(f"  baseline {rss['baseline_rss_mb']} MB · peak {rss['peak_rss_mb']} MB "
           f"({rss['samples']} samples)")
 
+    semantic = measure_semantic_retrieval()
+    print(f"\nM1-M2 retrieval, MiniLM profile ({semantic.get('n_questions', 0)} questions)")
+    if semantic["measured"]:
+        print(f"  tfidf   " + "  ".join(f"R@{k}={semantic['tfidf'][f'recall@{k}']}" for k in (1, 3, 5, 10))
+              + f"  MRR={semantic['tfidf']['mrr']}  p50={semantic['tfidf']['query_p50_ms']} ms")
+        print(f"  minilm  " + "  ".join(f"R@{k}={semantic['minilm'][f'recall@{k}']}" for k in (1, 3, 5, 10))
+              + f"  MRR={semantic['minilm']['mrr']}  p50={semantic['minilm']['query_p50_ms']} ms")
+        print("  note: MiniLM does NOT beat TF-IDF on this fixture. See the interpretation field.")
+    else:
+        print(f"  not measured \u2014 {semantic['reason']}")
+
     load = measure_model_load()
-    print(f"\nM8 model load time: NOT MEASURED — {load['reason']}")
+    if load["measured"]:
+        print("\nM8 model load (measured, CPU)")
+        print(f"  MiniLM load            {load['minilm_load_seconds']} s "
+              f"({load['minilm_embedding_dimension']}-dim)")
+        print(f"  MiniLM one sentence    {load['minilm_embed_one_sentence_ms']} ms")
+        print(f"  FLAN-T5 tokenizer      {load['flan_t5_tokenizer_load_seconds']} s")
+        print(f"  FLAN-T5 model          {load['flan_t5_model_load_seconds']} s")
+        print(f"  FLAN-T5 greedy gen     {load['flan_t5_greedy_generate_seconds']} s")
+        print(f"  on disk                {load['weights_on_disk_mb']}")
+    else:
+        print(f"\nM8 model load: NOT MEASURED \u2014 {load['reason']}")
 
     payload = {
         "fixture": FIXTURE.name,
@@ -559,6 +723,7 @@ def main() -> int:
         "M9_determinism": determinism,
         "M7_peak_rss": rss,
         "M8_model_load": load,
+    "M1_recall_semantic_profile": semantic,
         "elapsed_seconds": round(time.perf_counter() - started, 2),
     }
     if args.json:

@@ -147,6 +147,104 @@ class TestTfidfBackend:
         assert (first != second).nnz == 0 or np.allclose(first.toarray(), second.toarray())
 
 
+class TestMiniLmSimilarityShapes:
+    """The shape contract, tested with no model and no weights.
+
+    Found by Phase 8, when the six `semantic` tests were run for the first time and four of
+    them failed with `ValueError: Expected 2D array, got 1D array instead`.
+
+    `embed_query` returns `embed_documents([text])[0]`, which is a **1-D** `(384,)` array.
+    `embed_documents` returns a **2-D** `(n, 384)` matrix. Handing the 1-D query straight to
+    `sklearn.metrics.pairwise.cosine_similarity` raises, so **every semantic query failed**.
+
+    This stayed invisible for six phases because the six tests that would have caught it are
+    deselected when the weights are absent -- which is every run, including CI. The TF-IDF
+    backend returns a sparse `(1, n)` matrix from `embed_query` and never trips the bug, so
+    all 441 offline tests passed the whole time.
+
+    Which is why these tests build plain arrays instead of loading a model: a guard that needs
+    the weights it is guarding against would not run in CI, and would be no guard at all.
+    """
+
+    @staticmethod
+    def _backend() -> MiniLMEmbeddingBackend:
+        """A MiniLM backend with `_load` stubbed out, so no weights are ever touched."""
+        backend = MiniLMEmbeddingBackend(local_files_only=True)
+        backend._model = object()  # any non-None value satisfies `is_loaded`
+        return backend
+
+    @staticmethod
+    def _unit(vectors: int) -> np.ndarray:
+        """`n` genuinely orthonormal-ish unit vectors, so scores are predictable."""
+        basis = np.eye(vectors, vectors, dtype=np.float32)
+        return basis
+
+    def test_a_one_dimensional_query_is_accepted(self) -> None:
+        """The exact shape `embed_query` produces. This is the case that raised."""
+        backend = self._backend()
+        store = self._unit(384)  # (384, 384): 384 stored unit vectors
+        query = store[7]  # 1-D (384,), exactly what embed_query returns
+
+        assert query.ndim == 1
+        scores = backend.similarity(query, store)
+
+        assert scores.shape == (384,)
+        assert ((scores >= 0.0) & (scores <= 1.0)).all()
+
+    def test_a_two_dimensional_query_is_still_accepted(self) -> None:
+        backend = self._backend()
+        store = self._unit(384)
+        query = store[7].reshape(1, -1)
+
+        scores = backend.similarity(query, store)
+
+        assert scores.shape == (384,)
+        assert np.allclose(scores, backend.similarity(store[7], store))
+
+    def test_an_identical_vector_scores_one(self) -> None:
+        """Self-comparison: raw cosine 1.0 \u2192 rescaled 1.0."""
+        backend = self._backend()
+        store = self._unit(8)
+        scores = backend.similarity(store[0], store)
+
+        assert scores[0] == pytest.approx(1.0)
+
+    def test_an_orthogonal_vector_scores_one_half(self) -> None:
+        """Raw cosine 0.0 lands mid-scale.
+
+        This is the cost of `rescale_cosine_to_unit_interval`, and it is why the pipeline turns
+        the flag **off** for TF-IDF (AGENTS-style caveat, Architecture \u00a75.2): an unrelated pair
+        scoring 0.5 is exactly what makes a raw floor meaningless. Recorded rather than hidden.
+        """
+        backend = self._backend()
+        store = self._unit(8)
+        scores = backend.similarity(store[0], store)
+
+        assert scores[1:] == pytest.approx(0.5)
+
+    def test_a_single_row_store_does_not_squeeze_the_query(self) -> None:
+        """`np.atleast_2d` on the store matters when the store is already one row."""
+        backend = self._backend()
+        store = self._unit(8)[:1]
+
+        assert backend.similarity(store[0], store).shape == (1,)
+
+    def test_an_empty_store_returns_an_empty_result_rather_than_raising(self) -> None:
+        backend = self._backend()
+        assert backend.similarity(np.zeros(384, dtype=np.float32), np.zeros((0, 384))).shape == (0,)
+
+    def test_embed_query_really_does_return_one_dimensional(self) -> None:
+        """Pins the asymmetry this class exists for.
+
+        Stubs `embed_documents` to a 2-D result so the check needs no weights, and asserts the
+        shape `similarity` has to cope with. If someone 'tidies' `embed_query` to return a
+        matrix, this fails and the guard above can be revisited deliberately.
+        """
+        backend = self._backend()
+        backend.embed_documents = lambda texts: self._unit(384)[:1]  # type: ignore[method-assign]
+        assert backend.embed_query("anything").ndim == 1
+
+
 class TestMiniLmBackendDegradation:
     """The failure paths matter more than the success path when there is no network."""
 

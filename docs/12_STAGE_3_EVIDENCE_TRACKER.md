@@ -101,9 +101,32 @@ thing this document exists to prevent. Run 14 is current.
 
 Zero failures across all fourteen runs. Zero skips, zero xfails.
 
-The `6 deselected` are the `semantic`-marked tests. **`pytest -q -m semantic` has never been run** —
-MiniLM and FLAN-T5 weights are absent from this machine. They are written and collectable; their
-result is **unmeasured**, and no row in this document may claim otherwise.
+The `6 deselected` are the `semantic`-marked tests. **`pytest -q -m semantic` was run on
+2026-10-10: 6 passed** in 38.4 s, on CPU, after the weights were fetched. Getting there required
+`HF_HUB_DISABLE_XET=1` — the default Hugging Face transport stalled indefinitely on this network
+while a plain ranged HTTP request of the same file ran at 1.29 MB/s.
+
+**The first run was 2 passed, 4 failed**, and the four shared one cause: `MiniLMEmbeddingBackend.
+embed_query` returns a 1-D `(384,)` array while `similarity()` handed it to
+`sklearn.metrics.pairwise.cosine_similarity`, which requires 2-D. **Every semantic query raised.**
+Fixed, and guarded by 7 regression tests that build plain arrays and need no weights, so the guard
+runs in CI where the tests that found it never did. Full account in
+[15 §7.7](15_PROGRESS_TRACKER.md#77-semantic-validation--the-six-tests-ran-and-found-two-live-defects).
+
+| Semantic figure | Value | Source |
+|---|---|---|
+| MiniLM load (warm cache) | **5.48 s** | [logs/04_measure.txt](../logs/04_measure.txt) |
+| MiniLM encode, 46 chunks | 2.791 s (60.7 ms/chunk) | `tools/measure.py` |
+| FLAN-T5 model load / greedy generate | 0.93 s / 0.683 s | [logs/04_measure.txt](../logs/04_measure.txt) |
+| Weights on disk | MiniLM 91.6 MB, FLAN-T5 311.1 MB | HF cache |
+| MiniLM Recall@1 / @3 / MRR | **0.667 / 0.889 / 0.806** | 9 hand-authored questions |
+| TF-IDF Recall@1 / @3 / MRR | **0.667 / 1.000 / 0.778** | same |
+| MiniLM retrieval p50 | ~31 ms | vs ~2 ms TF-IDF |
+
+**MiniLM did not beat TF-IDF on this fixture.** Same Recall@1, worse Recall@3, marginally better MRR,
+for ~15x the retrieval latency and ~3x the memory. That is the measured justification for making the
+offline profile the default, and it is reported rather than omitted because it is the least
+flattering result in this table.
 
 ### 6.1c Five verifier defects, and the three that testing-the-tests found
 

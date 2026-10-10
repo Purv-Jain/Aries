@@ -14,10 +14,10 @@
 | **Phase complete** | Phases 0–6: research, documentation, foundation, retrieval, verification, UI, testing + hardening |
 | **Phase in progress** | **7** (Stage 3 readiness) — report **drafted** at [16_STAGE_3_REPORT_DRAFT.md](16_STAGE_3_REPORT_DRAFT.md), logs captured in [logs/](../logs/README.md) |
 | **G7 blocked on** | **Screenshots S1–S9** (no human at a screen), **B-05** (no repository ⇒ no contribution table, no CI), semantic-profile figures (no weights) |
-| **Tests written** | **441** across `test_core.py` (64), `test_retrieval.py` (80), `test_verification.py` (136), `test_ui.py` (98), `test_hardening.py` (63) |
+| **Tests written** | **449** across `test_core.py` (64), `test_retrieval.py` (87), `test_verification.py` (136), `test_ui.py` (98), `test_hardening.py` (64) |
 | **Commits made** | **2** — `fd2be70` (Phase 7, attributed) and `9772226` (Phases 0–6, **placeholder author**, B-05) |
 | **CI** | **GREEN.** Run [37880879892](https://github.com/Purv-Jain/Aries/actions/runs/37880879892) on `66075b`: `offline (ubuntu-latest)`, `offline (windows-latest)`, `security-sweep` all **success**. B-08 closed |
-| **Model weights downloaded** | 0 — semantic and abstractive paths written, **unmeasured** |
+| **Model weights downloaded** | **2** — `all-MiniLM-L6-v2` (91.6 MB) and `flan-t5-small` (311.1 MB), fetched 2026-10-10 via `HF_HUB_DISABLE_XET=1` |
 | **Calibrated** | `verified_threshold` 0.62 → **0.63**, from a 24-case labelled set; false-`Verified` 0.125 → **0.000** |
 | **Metrics measured** | 13 of 24. 4 explicitly **not measured** (model load, semantic-profile figures, FLAN-T5 marker coverage, semantic determinism) |
 
@@ -31,7 +31,7 @@
 | 3 | Retrieval | **DONE** | Purv | G3 **passed** | `pytest -q` → 144 passed; see §7 |
 | 4 | Generation + verification | **DONE** | Rishabh / Purv | G4 **passed** | `pytest -q` → 227 passed; see §7 |
 | 5 | Premium UI | **DONE** | Purv | G5 **passed**, 3 manual items pending | `pytest -q` → 325 passed; headless HTTP 200; see §7 |
-| 6 | Testing + hardening | **DONE** | Bhavya | G6 **passed**, CI green | `pytest -q` → 441 passed; see §7 |
+| 6 | Testing + hardening | **DONE** | Bhavya | G6 **passed**, CI green | `pytest -q` → 449 passed; see §7 |
 | 7 | Stage 3 readiness | **IN PROGRESS** | All | G7 **not passed** — 4 of 8 scope items done, 3 blocked | [16_STAGE_3_REPORT_DRAFT.md](16_STAGE_3_REPORT_DRAFT.md), [logs/](../logs/README.md) |
 
 ## 3. Completed outputs
@@ -184,7 +184,7 @@ reach a green result.
 | **2026-10-08** | **6** | **`pytest -q -m "not semantic"`, all three `*_OFFLINE=1`** | **Offline** | **371 passed, 6 deselected in 57.08s** |
 | **2026-10-08** | **6** | **fresh venv from `requirements.txt`, then the same command** | **Offline** | **371 passed, 6 deselected in 79.37s** |
 | **2026-10-08** | **7** | **`pytest -q`, after 4 verifier fixes (§7.4)** | **Offline** | **402 passed, 6 deselected in 53.50s** |
-| — | all | `pytest -q -m semantic` | Semantic | **never run. No MiniLM or FLAN-T5 weights on this machine. Unmeasured, not passed.** |
+| — | all | `pytest -q -m semantic` | Semantic | **6 passed**, 38.4 s, 2026-10-10. Two live defects found and fixed on the first run — see §7.7 |
 
 The **6 deselected** tests carry the `semantic` marker
 ([09 §6](09_TESTING_STRATEGY.md#6-profile-strategy)). They are written and collectable — pytest
@@ -218,7 +218,7 @@ rather than filtered — a suppressed warning hides the next real one too.
 | EC-14 multi-document IDs | `TestMultiDocument` (3) + `test_ec14_each_document_keeps_its_own_page_numbers` | covered for identity and pages; citation mapping is Phase 4 |
 | EC-15 repeat index + persistence | 4 tests incl. `test_restart_does_not_re_read_the_pdf` | covered — the restart test booby-traps the PDF reader |
 | FR-16 one protocol, two backends | `test_both_backends_satisfy_the_protocol` | covered |
-| FR-17 MiniLM 384-dim | `TestSemanticProfile` | **written, unmeasured** |
+| FR-17 MiniLM 384-dim | `TestSemanticProfile` | **4 passed** — after fixing the 1-D query defect that broke every semantic query |
 | FR-18 TF-IDF offline | whole suite with the hub disabled | covered |
 | FR-19 Chroma persistence | `test_chroma_index_survives_a_new_pipeline_instance` | covered |
 | FR-20 deterministic in-memory store | `test_ir3_ties_break_on_chunk_id_...` | covered |
@@ -581,6 +581,110 @@ contains antonym pairs, exactly the four fire, all six non-firings decline for a
 the two end-to-end label assertions). No existing test weakened; the 6 call sites that used the old
 three-argument `_antonym_conflict` signature were updated to pass passage text.
 
+## 7.7 Semantic validation — the six tests ran, and found two live defects
+
+**Phase 8, 2026-10-10.** `pytest -q -m semantic` had never been executed. It now has been, and the
+result is not the reassuring one the plan assumed.
+
+### Getting the weights down
+
+`huggingface.co` was reachable, and `torch 2.13.0+cpu`, `transformers`, `sentence-transformers` and
+`onnxruntime` were all installed. The download nevertheless appeared to hang: two attempts ran for
+15 and then 40 minutes and left a 63.88 MB `.incomplete` file whose timestamp never moved.
+
+**The cause was not bandwidth.** A ranged HTTP request for the same file returned 4.19 MB in 3.2 s
+(**1.29 MB/s**) from `us.aws.cdn.hf.co`. The stall was in the **Xet transport** that
+`huggingface_hub` prefers by default. Setting `HF_HUB_DISABLE_XET=1` forced the classic HTTP path
+and both models downloaded in under a minute.
+
+That is worth recording as a portability finding: on this machine, on this network, the default
+Hugging Face download path does not work and one environment variable fixes it.
+
+### First run: 2 passed, 4 failed
+
+| | Result |
+|---|---|
+| `test_minilm_produces_384_dimensional_unit_vectors` | **passed** |
+| `test_cosine_rescaling_is_off_for_tfidf_and_on_for_minilm` | **passed** |
+| `test_semantic_similarity_is_rescaled_to_zero_one` | **FAILED** `ValueError: Expected 2D array, got 1D array instead` |
+| `test_unrelated_text_scores_lower_than_related_text` | **FAILED** — same |
+| `test_minilm_end_to_end_retrieval_finds_the_right_page` | **FAILED** — same |
+| `test_minilm_similarity_feeds_the_support_score` | **FAILED** — same |
+
+### The defect
+
+`MiniLMEmbeddingBackend.embed_query` returns `embed_documents([text])[0]`, which is a **1-D** `(384,)`
+array. `embed_documents` returns a **2-D** `(n, 384)` matrix. `similarity()` passed the 1-D query
+straight to `sklearn.metrics.pairwise.cosine_similarity`, which rejects it.
+
+**Every semantic query raised.** `PipelineConfig(embedding_backend="minilm")` could not answer a
+single question.
+
+Six phases of green tests did not catch it, and the reason is the point:
+
+* the six tests that would have caught it are deselected whenever the weights are absent — which is
+  every run, including every CI run;
+* the TF-IDF backend returns a sparse `(1, n)` matrix from `embed_query`, so it never trips the bug;
+* all 441 offline tests passed throughout.
+
+A defect can be invisible for exactly as long as nobody runs the path that contains it.
+
+Fixed by reshaping a 1-D query to one row, with **7 weights-free regression tests** added
+(`TestMiniLmSimilarityShapes`). They build plain arrays and stub `_load`, so they run in CI where
+no model exists — a guard that needed the weights it guards would have been no guard at all. The
+guard also asserts its result set is identical for 1-D and 2-D queries, and pins the 1-D/2-D
+asymmetry itself so a future "tidying" of `embed_query` fails deliberately rather than silently.
+
+**After the fix: 6 passed.** `449 passed, 6 deselected` offline, unchanged.
+
+### M8 is now a measurement, not a prediction
+
+| Figure | Measured |
+|---|---|
+| MiniLM load (warm cache) | **5.48 s** |
+| MiniLM, one sentence | **68.2 ms** |
+| MiniLM encoding, 46 chunks | **2.791 s** (60.7 ms/chunk) |
+| MiniLM query encode | **29.5 ms** |
+| FLAN-T5 tokenizer load | **1.85 s** |
+| FLAN-T5 model load | **0.93 s** |
+| FLAN-T5 greedy generation | **0.683 s** |
+| Weights on disk | MiniLM **91.6 MB**, FLAN-T5 **311.1 MB** |
+| Resident memory | 330.5 MB baseline → 480.6 after MiniLM → 589.3 after FLAN-T5 |
+| Device | CPU only, `torch.cuda.is_available() == False`, 6 threads |
+
+Single run, CPU, no GPU. Each figure is one measurement, not an average.
+
+### The finding that matters: MiniLM did not beat TF-IDF
+
+Same 9 hand-authored questions, same 15-page report, same store.
+
+| | TF-IDF | MiniLM | MiniLM better? |
+|---|---|---|---|
+| Recall@1 | 0.667 | 0.667 | **no** |
+| Recall@3 | **1.000** | 0.889 | **no** |
+| Recall@5 | 1.000 | 1.000 | no |
+| Recall@10 | 1.000 | 1.000 | no |
+| MRR | 0.778 | **0.806** | yes |
+| Retrieval p50 | **~2 ms** | ~31 ms | — |
+| Full `ask()` p50 | ~12–37 ms | ~494 ms | — |
+| Peak RSS | **192.6 MB** | 589.3 MB | — |
+
+Identical at Recall@1, worse at Recall@3, marginally better at MRR, for roughly **15x** the retrieval
+latency and **3x** the memory. The question it lost is instructive: *"How large is the FLAN-T5-small
+weight file?"* — TF-IDF puts page 9 first on the lexical anchor, MiniLM ranks it fourth, because the
+size is stated in a table and there is no semantic relationship between "large" and "308 MB".
+
+**This is the measured justification for the project's central design decision**, which until now was
+an argument rather than a result: the semantic profile is an option, and on this evidence the offline
+profile should be the default. Nine questions against one document cannot settle MiniLM versus
+TF-IDF in general, and nothing here claims they do.
+
+### What is still not measured
+
+The semantic profile's *verification* quality end to end, and FLAN-T5's effect on citation markers
+through the pipeline. Both need a semantic-profile run of the labelled set, which is a larger job
+than Phase 8 and is not claimed here.
+
 ## 8. Measurements taken
 
 ### 8.1 Phase 6 — on the real Stage 2 report
@@ -718,7 +822,7 @@ beside the real ones would flatter the system.
 - **B-08 — closed.** CI green, run 37880879892 on `66075b`, all three jobs success.
 - **R-23 ? the UI has not been seen.** 98 automated tests prove the render path executes. That is not the same as a readable layout.
 - **The calibration rests on 24 self-authored, self-labelled cases.** It justifies 0.63; it does not prove it. The recorded 0.958 "agreement" is a self-reconciliation, not independent labellers, and is described that way everywhere it appears.
-- **The 6 `semantic` tests have never run.** If the team can reach Hugging Face, run them once and record the result ? pass or fail.
+- ~~The 6 `semantic` tests have never run.~~ **Done 2026-10-10** — 6 passed. But MiniLM measured **no better than TF-IDF** on this fixture (§7.7), which is the finding that matters.r fail.
 - **B-07 ? the fixture PDF is outside the repository.** `tools/evaluate.py` and `tools/measure.py` skip without it, so the calibration is not reproducible on a fresh clone until someone decides whether the report may be committed.
 - **B-05 ? still no git repository.** Nothing is committed, so nothing in this report can cite a commit hash, and ?13 stays empty.
 
