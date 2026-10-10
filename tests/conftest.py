@@ -41,6 +41,21 @@ LONG_PAGE_BODY = " ".join(
 )
 
 
+# The font in `build_pdf` declares `/WinAnsiEncoding`, which **is** Windows-1252. Encoding the
+# content stream as ISO-8859-1 therefore mismatches the declaration, and every character that
+# exists only in the 0x80-0x9F range -- em dash, curly quotes, en dash -- is replaced by `?` at
+# *write* time. The extractor then faithfully returns the question marks it was given, which reads
+# as an extraction failure when the fault is here.
+#
+# Found by building a fixture with non-ASCII content and checking the raw content-stream bytes
+# rather than trusting the extracted text: the stream contained literal `?` (0x3F) where the em
+# dash should have been. Accented characters survived precisely because they are in ISO-8859-1.
+#
+# cp1252 is the correct pairing and is a strict superset of latin-1 for the printable range, so
+# ASCII-only fixtures are byte-identical either way.
+_CONTENT_ENCODING = "cp1252"
+
+
 def escape_pdf_text(value: str) -> str:
     return value.replace("\\", r"\\").replace("(", r"\(").replace(")", r"\)")
 
@@ -74,7 +89,7 @@ def build_pdf(page_texts: list[str], *, graphics_only: bool = False) -> bytes:
                 + "".join(f"({escape_pdf_text(line)}) Tj T*\n" for line in lines)
                 + "ET"
             )
-        stream = body.encode("latin-1", "replace")
+        stream = body.encode(_CONTENT_ENCODING, "replace")
         objects[page_ids[index]] = (
             f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
             f"/Resources << /Font << /F1 {font_obj} 0 R >> >> "

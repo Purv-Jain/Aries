@@ -14,7 +14,7 @@
 | **Phase complete** | Phases 0–6: research, documentation, foundation, retrieval, verification, UI, testing + hardening |
 | **Phase in progress** | **7** (Stage 3 readiness) — report **drafted** at [16_STAGE_3_REPORT_DRAFT.md](16_STAGE_3_REPORT_DRAFT.md), logs captured in [logs/](../logs/README.md) |
 | **G7 blocked on** | **Screenshots S1–S9** (no human at a screen), **B-05** (no repository ⇒ no contribution table, no CI), semantic-profile figures (no weights) |
-| **Tests written** | **449** across `test_core.py` (64), `test_retrieval.py` (87), `test_verification.py` (136), `test_ui.py` (98), `test_hardening.py` (64) |
+| **Tests written** | **512** across `test_core.py` (64), `test_retrieval.py` (87), `test_verification.py` (136), `test_ui.py` (98), `test_hardening.py` (64), `test_generalisation.py` (63) |
 | **Commits made** | **2** — `fd2be70` (Phase 7, attributed) and `9772226` (Phases 0–6, **placeholder author**, B-05) |
 | **CI** | **GREEN.** Run [37880879892](https://github.com/Purv-Jain/Aries/actions/runs/37880879892) on `66075b`: `offline (ubuntu-latest)`, `offline (windows-latest)`, `security-sweep` all **success**. B-08 closed |
 | **Model weights downloaded** | **2** — `all-MiniLM-L6-v2` (91.6 MB) and `flan-t5-small` (311.1 MB), fetched 2026-10-10 via `HF_HUB_DISABLE_XET=1` |
@@ -31,7 +31,7 @@
 | 3 | Retrieval | **DONE** | Purv | G3 **passed** | `pytest -q` → 144 passed; see §7 |
 | 4 | Generation + verification | **DONE** | Rishabh / Purv | G4 **passed** | `pytest -q` → 227 passed; see §7 |
 | 5 | Premium UI | **DONE** | Purv | G5 **passed**, 3 manual items pending | `pytest -q` → 325 passed; headless HTTP 200; see §7 |
-| 6 | Testing + hardening | **DONE** | Bhavya | G6 **passed**, CI green | `pytest -q` → 449 passed; see §7 |
+| 6 | Testing + hardening | **DONE** | Bhavya | G6 **passed**, CI green | `pytest -q` → 512 passed (492 + 20 skips without the calibration report); see §7 |
 | 7 | Stage 3 readiness | **IN PROGRESS** | All | G7 **not passed** — 4 of 8 scope items done, 3 blocked | [16_STAGE_3_REPORT_DRAFT.md](16_STAGE_3_REPORT_DRAFT.md), [logs/](../logs/README.md) |
 
 ## 3. Completed outputs
@@ -142,7 +142,7 @@
 | ~~B-04~~ | ~~Phase 2 fixtures not built~~ | — | **RESOLVED** — generated in-process by `tests/conftest.py::build_pdf` | — |
 | **B-05** | **The Phase 0-6 commit carries a placeholder author** | Per-member contribution table (report §13, item 7.4) | **PARTLY RESOLVED, disclosure chosen over rewriting history.** A repository now exists at [Purv-Jain/Aries](https://github.com/Purv-Jain/Aries) with two commits. `9772226` (all of Phases 0-6) was authored by the git default placeholder `Your Name <your.email@example.com>`, because the repo was created before the identity was configured; `fd2be70` (Phase 7) is correctly attributed to `Purv-Jain <purv.jain24@sakec.ac.in>`. The placeholder commit **cannot be decomposed** into three contributions, so no per-member split is derivable. Rewriting it was considered and **rejected**: it changes a commit on a public remote, invalidates it for anyone who cloned, and needs both teammates to coordinate. Correct it after submission. | Human |
 | **B-06** | ~~No real academic PDF in the repo~~ | R-11 | **RESOLVED for measurement** — the team's own Stage 2 report (15 pages) was used as the fixture. See **B-07** for the remaining issue | — |
-| **B-07** | **The fixture PDF lives in `~/Downloads/.pdf/`, outside the project** | Reproducing the calibration on a fresh clone | A decision: commit the report under `tests/data/`, or document that `tools/evaluate.py` requires a local copy | Human |
+| ~~**B-07**~~ | **PARTIALLY CLOSED.** The Stage 2 report is deliberately **not** committed — it is the team's submission and names PRNs, and the repo is public. Its sha256 is recorded so numbers are checkable. A **synthetic 9-PDF fixture corpus (35 KB) is committed** and 63 generality tests now run on a fresh clone. The 34-case calibration still needs the real report: 492 passed + 20 skipped without it | §7.8 | **Residual open** — closing the calibration half needs a human decision on publishing the report |
 | ~~B-08~~ | ~~`ubuntu-latest` CI job fails~~ | Gate G6 item | **RESOLVED AND VERIFIED 2026-10-09.** Cause: `PROJECT_ROOT / r"tests\data\eval_cases.jsonl"` resolves to a *single filename* on POSIX, where a backslash is a legal filename character. The nine `TestEvaluationSetIntegrity` tests called `_load_cases()` with no skip guard, so they raised `FileNotFoundError` instead of skipping — which is why the job failed rather than silently under-reporting. Fixed in PR #1 and in `66075b` (the identical literal in `tools/build_cases.py`). **Verified green**: run [37880879892](https://github.com/Purv-Jain/Aries/actions/runs/37880879892) on `66075b`, all three jobs `success`. `TestPathsAreCrossPlatform` fails on any reintroduction | — |
 
 **B-05 is partly resolved** — the repository exists and Phase 7 is correctly attributed; the
@@ -154,7 +154,7 @@ Remaining blockers and what each needs:
 | # | Needs |
 |---|---|
 | **B-05** | Post-submission history rewrite, or leave it — disclosure is already in report §13 |
-| **B-07** | A decision on whether the fixture PDF may be committed |
+| **B-07** | ~~A decision on whether the fixture PDF may be committed~~ — **decided: it may not be** (public repo, PRNs). A synthetic corpus is committed instead; the residual needs a human to publish the report privately or accept the 20 skips | §7.8 |
 | **B-08** | Nothing — resolved. Re-run CI to confirm green |
 
 Nothing is blocked on external parties, network access, or funding. Everything outstanding needs
@@ -685,6 +685,104 @@ The semantic profile's *verification* quality end to end, and FLAN-T5's effect o
 through the pipeline. Both need a semantic-profile run of the labelled set, which is a larger job
 than Phase 8 and is not claimed here.
 
+## 7.8 B-07 — fixtures in the repository, and a generality question worth asking
+
+**Phase 8, 2026-10-10.** B-07 was filed as "the calibration PDF lives outside the project". Fixing it
+surfaced a larger question: *is the system calibrated against one document, or does it work on
+reports nobody here has read?* A fixture that reproduces our own numbers proves the first and says
+nothing about the second.
+
+### What was committed, and what deliberately was not
+
+**Not committed: the Stage 2 report.** It is the team's own academic submission; it names its
+authors, their PRNs and their project guide; and this repository is public. Publishing it is not a
+decision an agent should make. Its identity is recorded instead, so any number in the report can be
+checked rather than taken on trust:
+
+```
+sha256  307ed3242ff3d1f7321800c7d86c3eb21575b36032490b0d3de23368e985d687
+bytes   764646
+pages   15  →  46 chunks
+```
+
+**Committed: a synthetic fixture corpus**, [tools/build_fixtures.py](../tools/build_fixtures.py) →
+`tests/data/fixtures/`. Nine PDFs, **35 KB in total**, every byte synthesised from literal strings in
+that script — no third party's document, no team names, no PRNs. All nine are committed rather than
+generated on demand, because a test that needs a build step before it can pass is a test a fresh
+clone never ran.
+
+| fixture | hazard it exists for | extraction |
+|---|---|---|
+| `single_column` | the control | 4 pages, 1,364 chars |
+| `two_column` | naive extraction interleaves columns mid-sentence | 4 pages, 1,364 chars |
+| `wide_table` | space-padded rows match the wrong quantity | 4 pages |
+| `long_page` | a page far longer than normal, chunk boundaries | 4 pages, 11,923 chars |
+| `hyphenated` | words broken across a line break | 4 pages |
+| `unicode` | em dash, curly quotes, accented Latin-1 | 4 pages |
+| `headers_footers` | a running head on every page | 4 pages |
+| `scanned` | no text layer | **refused** — `scanned_pdf` |
+| `encrypted` | password protected | **refused** — `encrypted_pdf` |
+
+### A defect this found, in the test harness rather than the product
+
+The first `unicode` fixture came back with the em dash and both curly quotes **lost** — while the
+surrounding English read perfectly, so a word-level assertion would have passed.
+
+Checking the **raw content-stream bytes** rather than trusting the extracted text located it: the
+stream contained literal `?` (0x3F) where the characters should have been. The cause was in
+`tests/conftest.py`, which encoded the content stream as **ISO-8859-1 against a font declaring
+`/WinAnsiEncoding`**. Those two are not the same codec: U+2014, U+201C and U+201D are absent from
+ISO-8859-1 entirely and were replaced at *write* time. Accented characters survived precisely because
+they *are* in ISO-8859-1 — which is why the defect looked like an extractor bug and was not one.
+
+Fixed by encoding as `cp1252`, the correct pairing. All six characters now survive extraction, and
+all 512 offline tests still pass, so the change is a strict improvement rather than a swap.
+
+**A system can be innocent and still be wrong, and the way to tell is to look at the bytes.**
+
+### What the generality suite actually asserts
+
+[tests/test_generalisation.py](../tests/test_generalisation.py), **63 tests**, for each extractable
+fixture: pages come out, page numbers are contiguous and one-based, every citation resolves, no
+claim is `Verified` without one, retrieval finds the page the answer is on, output is byte-identical
+across three runs, and — the one that matters most — **abstention still fires** on a topic absent
+from that document.
+
+That last one is a generalisation test rather than a smoke test. The `min_query_coverage` floor was
+calibrated on the Stage 2 report; if it only worked there, it would be a property of that document
+instead of of the system. It does not: all three out-of-corpus questions abstain on all seven
+extractable fixtures.
+
+### The boundary, asserted so it cannot drift
+
+`TestWhatThisSuiteDoesNotClaim` names six things this does **not** cover — OCR'd scans, right-to-left
+and CJK scripts, rotated pages, tracked-change layers, multi-document cross-citation, and anything
+needing a layout model — and asserts each appears in the module docstring, so the coverage claim and
+the code cannot disagree.
+
+Nine synthetic fixtures are not nine real papers. The honest summary is *"no error on the hazards
+listed above"*, not *"works on every research report"*.
+
+### Fresh-clone reality, measured both ways
+
+| | with the Stage 2 report | without it |
+|---|---|---|
+| offline suite | **512 passed**, 0 skipped | **492 passed, 20 skipped** |
+| 6 `semantic` | pass | pass (weights on disk) |
+| generality | 63 pass | 63 pass |
+
+The 20 skips are exactly the `@needs_fixture` calibration tests, each printing its reason. They skip;
+they are never counted as passes. Reporting "0 skipped" without that condition would have been
+precisely the kind of claim this project exists not to make — it is true only on a machine that
+happens to hold the file.
+
+### Also fixed
+
+`README.md` documented `python tools/evaluate.py` as sweeping the threshold. It does not — that needs
+`--sweep` — and running it with `--json tests/data/eval_results.json` **silently deleted the 1,925-line
+sweep block** from the committed calibration record. Found in Phase A, reproduced and confirmed here.
+The documented command now carries `--sweep`, and `tools/evaluate.py` explains the consequence.
+
 ## 8. Measurements taken
 
 ### 8.1 Phase 6 — on the real Stage 2 report
@@ -823,7 +921,7 @@ beside the real ones would flatter the system.
 - **R-23 ? the UI has not been seen.** 98 automated tests prove the render path executes. That is not the same as a readable layout.
 - **The calibration rests on 24 self-authored, self-labelled cases.** It justifies 0.63; it does not prove it. The recorded 0.958 "agreement" is a self-reconciliation, not independent labellers, and is described that way everywhere it appears.
 - ~~The 6 `semantic` tests have never run.~~ **Done 2026-10-10** — 6 passed. But MiniLM measured **no better than TF-IDF** on this fixture (§7.7), which is the finding that matters.r fail.
-- **B-07 ? the fixture PDF is outside the repository.** `tools/evaluate.py` and `tools/measure.py` skip without it, so the calibration is not reproducible on a fresh clone until someone decides whether the report may be committed.
+- **B-07 — partially closed.** A synthetic 9-PDF fixture corpus is committed and 63 generality tests run on a fresh clone, but the 34-case calibration still needs the team's own report, which is deliberately not published. Without it: 492 passed, 20 skipped, each skip printing its reason
 - **B-05 ? still no git repository.** Nothing is committed, so nothing in this report can cite a commit hash, and ?13 stays empty.
 
 ## 10. Session handoff notes
@@ -861,6 +959,7 @@ The equivalents that matter now live in the project:
 | Start the app headless | `streamlit run app.py --server.headless true` |
 
 ## 11. Change log
+| 2026-10-10 | 8 | **B-07 partly closed; generality is now a measurement.** Nine synthetic PDFs (35 KB, all committed) covering two-column pages, space-padded tables, a very long page, hyphenation, non-ASCII, running headers, a scanned page and an encrypted file; **63 tests** assert the whole path on each — extraction, page numbering, citation resolution, retrieval of the answering page, determinism, and that **abstention still fires** on topics absent from each document, which is what proves the coverage floor is not a property of the Stage 2 report. The Stage 2 report itself is **deliberately not committed** (public repo, PRNs); its sha256 is recorded. Found and fixed a **harness** defect: `tests/conftest.py` encoded PDF content streams as ISO-8859-1 against a font declaring `/WinAnsiEncoding`, silently replacing em dashes and curly quotes with `?` at write time — accented letters survived, so it looked like an extractor bug and was not. Now cp1252. Also fixed the Phase A finding that `tools/evaluate.py` does not sweep without `--sweep` and silently deletes the committed sweep block. **512 passed** with the report, **492 + 20 skips** without. 63 added, none weakened |
 | 2026-10-09 | 7 | **R-25 closed: the antonym branch is measured, and a fourth defect falls out.** Ten labelled antonym cases (`ant_01`-`ant_10`) authored from real report passages; four must fire the contradiction check and six must not, each for a different named reason. Measured: **4/4 contradictions detected, 6/6 non-firings silent**. Adding them exposed a defect the 31 unit tests could not see — a claim about *any* subject was reported contradicted if the passage contained an opposite direction word anywhere, so `ant_09` (“The paid API expenditure increased after Stage 2”) was labelled `contradiction_detected` by a table row about blind trust. A false contradiction is worse than a missed one, so a subject gate now requires the claim to be about the sentence holding the antonym, exempting single-sentence passages so minimal pairs still fire; a test asserts the gated result set is a *subset* of the ungarded one over 100+ word pairs. Accuracy **0.667 → 0.735**, `Verified` recall 0.800 → 0.846, F1 0.889 → 0.917, precision 1.000, false-`Verified` 0.000, **threshold still 0.63**. Also documented a reporting trap: the sweep holds `review_threshold` at verified/2, so its accuracy column reads 0.706 against the shipped configuration's 0.735. ADR-0015 added. **441 passed, 6 deselected.** 12 tests added, none weakened |
 | 2026-10-09 | 7 | **R-24 closed: evidence-based abstention.** Audit first, code second. Rejected a floor on `relevance_score` after measuring that answerable and unanswerable cosine ranges overlap (any floor catching most unanswerable questions killed ≥5 of 8 answerable). Shipped `query_coverage` instead — fraction of the question's content words present in the retrieved passages — gated in `ask()` **before generation**, floor `0.50` in `AbstentionConfig`, swept 0.00→1.00 on a new 48-case labelled set (24 answerable naming their page, 24 unanswerable incl. **6 adversarial**). Measured: correct abstention **0.000 → 0.750**, false abstention **0.000**, false-`Verified` on the original 10 questions **15 → 0**, claims emitted on them **50 → 0**, answerable claims **unchanged**. Also: `GeneratedAnswer.notes` silently accepted a bare `str` (UI rendered single letters) — now coerced. **429 passed, 6 deselected.** ADR-0014 added; 14 docs updated; 24 tests added, none weakened |
 

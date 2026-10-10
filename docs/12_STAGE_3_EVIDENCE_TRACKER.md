@@ -27,7 +27,7 @@ Anything else stays empty. An empty `Evidence` cell means the claim cannot go in
 
 | Claim class | Count | Verified today |
 |---|---|---|
-| Automated tests | 17 scenarios + 20 contracts | **429 passing**, 6 deselected, 0 skipped; 17 scenarios + 20 contracts covered, plus 98 UI and 54 hardening tests |
+| Automated tests | 17 scenarios + 20 contracts | **512 passing**, 6 deselected, 0 skipped **with the calibration report present**; **492 passing + 20 skipped** without it, each skip printing its reason. 17 scenarios + 20 contracts covered, plus 98 UI, 64 hardening and 63 generality tests |
 | Screenshots | ~10 states | **0** |
 | Evaluation metrics | 34 + 48 | **14 measured**, **4 explicitly not measured**, 1 negative finding now **mitigated** (abstention, R-24), 1 calibration nuance (lexical paraphrase limit, D-26). §9 |
 | Commits attributable to a named student | 2 | **1 of 2.** `fd2be70` is attributed; `9772226` (all of Phases 0–6) carries the git default placeholder author and cannot be decomposed (B-05) |
@@ -99,7 +99,9 @@ Runs 11–13 predate the four verifier fixes found in Phase 7 (§6.1c). They are
 they report was the number the calibration was justified against, and rewriting history would be the
 thing this document exists to prevent. Run 14 is current.
 
-Zero failures across all fourteen runs. Zero skips, zero xfails.
+Zero failures across every run recorded here. Zero skips and zero xfails **on a machine holding the
+calibration report**; without it 20 `@needs_fixture` tests skip with a stated reason. Nothing is skipped
+silently, and no skip is counted as a pass.
 
 The `6 deselected` are the `semantic`-marked tests. **`pytest -q -m semantic` was run on
 2026-10-10: 6 passed** in 38.4 s, on CPU, after the weights were fetched. Getting there required

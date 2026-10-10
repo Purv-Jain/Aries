@@ -1,0 +1,102 @@
+%PDF-1.4
+%ту╧╙
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R 6 0 R 8 0 R 10 0 R] /Count 4 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 508 >>
+stream
+BT /F1 11 Tf 72 720 Td 14 TL
+(Instrument Calibration Report Ч Confidential Draft) Tj T*
+(Page 1 of 4) Tj T*
+() Tj T*
+(3.1 Calibration Procedure) Tj T*
+(The spectrometer was calibrated against a reference lamp before each session.) Tj T*
+(Calibration coefficients are stored alongside the raw readings, never inside them.) Tj T*
+(A drifted calibration is detected by comparing the reference lamp response to its) Tj T*
+(recorded baseline, and a drift above two percent triggers a full recalibration.) Tj T*
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 7 0 R >>
+endobj
+7 0 obj
+<< /Length 490 >>
+stream
+BT /F1 11 Tf 72 720 Td 14 TL
+(Instrument Calibration Report Ч Confidential Draft) Tj T*
+(Page 2 of 4) Tj T*
+() Tj T*
+(4.2 Sampling Strategy) Tj T*
+(Samples were drawn every ninety seconds over a six hour acquisition window.) Tj T*
+(The sampler discards the first reading of each window as a settling artefact.) Tj T*
+(Drift correction is applied before the samples are averaged, not afterwards.) Tj T*
+(Averaging first would fold the drift into every mean and hide the correction.) Tj T*
+ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 9 0 R >>
+endobj
+9 0 obj
+<< /Length 499 >>
+stream
+BT /F1 11 Tf 72 720 Td 14 TL
+(Instrument Calibration Report Ч Confidential Draft) Tj T*
+(Page 3 of 4) Tj T*
+() Tj T*
+(5.1 Noise Characteristics) Tj T*
+(Thermal noise dominates below the detector's threshold and cannot be calibrated away.) Tj T*
+(Shot noise scales with the square root of the exposure time at low flux.) Tj T*
+(Both sources are reported separately rather than combined into one figure.) Tj T*
+(Combining them would hide which one dominates under the conditions that matter.) Tj T*
+ET
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 11 0 R >>
+endobj
+11 0 obj
+<< /Length 507 >>
+stream
+BT /F1 11 Tf 72 720 Td 14 TL
+(Instrument Calibration Report Ч Confidential Draft) Tj T*
+(Page 4 of 4) Tj T*
+() Tj T*
+(6.3 Reproducibility Statement) Tj T*
+(Every figure in this report was produced by the pipeline committed alongside it.) Tj T*
+(No number in this report was transcribed by hand from a previous version.) Tj T*
+(The deterministic profile requires no network access and no downloaded weights.) Tj T*
+(The same input therefore yields the same output on any machine that runs the code.) Tj T*
+ET
+endstream
+endobj
+xref
+0 12
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000140 00000 n 
+0000000237 00000 n 
+0000000363 00000 n 
+0000000922 00000 n 
+0000001048 00000 n 
+0000001589 00000 n 
+0000001715 00000 n 
+0000002265 00000 n 
+0000002393 00000 n 
+trailer
+<< /Size 12 /Root 1 0 R >>
+startxref
+2952
+%%EOF

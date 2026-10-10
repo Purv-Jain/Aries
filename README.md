@@ -2,7 +2,7 @@
 
 **Status:** Phase 7 in progress — built, tested, calibrated, measured, and the Stage 3 report drafted.
 **Current gate:** `PHASE 7 ACTIVE — GATE G7 NOT YET PASSED`
-**Tests:** `pytest -q` → **449 passed, 6 deselected**, 0 failures; the 6 `semantic` tests **pass too** — 449 + 6 = 455 (2026-10-10)
+**Tests:** `pytest -q` → **512 passed, 6 deselected**, 0 failures, 0 skipped **on this machine** (2026-10-10). Without the Stage 2 report it is **492 passed, 20 skipped** — see [Fixtures](#fixtures). The 6 `semantic` tests pass separately
 **Run it:** `streamlit run app.py`
 **Last updated:** 2026-10-08
 
@@ -223,21 +223,47 @@ nothing depends on colour alone. Full spec in
 python -m venv .venv
 .venv\Scripts\activate                      # Windows
 pip install -r requirements.txt             # verified working on CPython 3.14.6
-pytest -q                                   # 449 passed, 6 deselected as of 2026-10-10
+pytest -q                                   # 512 passed, 6 deselected as of 2026-10-10
 pytest -q -m semantic                     # 6 passed, once the weights are fetched (see below)
 HF_HUB_DISABLE_XET=1                        # required once: the default transport stalls here
 streamlit run app.py                        # the application
 python run_demo.py --pdf <path>             # CLI: index -> ask -> verify, exit 0/1/2
 python tools/evaluate.py --sweep            # score the labelled set AND sweep the threshold
+                                           # (--sweep is required; without it no sweep is produced)
 python tools/measure.py --pdf <path>        # latency, Recall@k, RAM, determinism, abstention
 ```
 
-`tools/evaluate.py` and `tools/measure.py` expect the Stage 2 report at
-`~/Downloads/.pdf/FAI_PE_Microproject_Stage_2_Report_Revised.pdf`, which is **outside this
-repository** (B-07). Without it they skip rather than fail.
+### Fixtures
+
+`tools/evaluate.py` and `tools/measure.py` need the Stage 2 report at
+`~/Downloads/.pdf/FAI_PE_Microproject_Stage_2_Report_Revised.pdf`. It is **not** in this repository,
+and that is deliberate: it is the team's own academic submission and it names its authors and their
+PRNs, and this repository is public. What is committed instead is a **synthetic fixture corpus** at
+`tests/data/fixtures/` (9 PDFs, 35 KB) covering documented extraction hazards — two-column pages,
+space-padded tables, very long pages, hyphenation, non-ASCII, running headers, a scanned page with
+no text layer, and an encrypted file. A fresh clone runs `pytest -q` and gets **512 tests**,
+including 63 that index, retrieve, generate, verify and abstain on documents this project was never
+calibrated against.
+
+**On a fresh clone the result is 492 passed and 20 skipped**, and that is the honest number rather than
+0 skipped: all 20 are the `@needs_fixture` calibration tests, each skipping with its reason printed.
+They are skipped, never silently passed.
+
+The *calibration* set (34 verification cases, 48 abstention cases) is authored from that report and
+cannot be reproduced without it. Its identity is recorded so the numbers can be checked:
+
+```
+sha256  307ed3242ff3d1f7321800c7d86c3eb21575b36032490b0d3de23368e985d687
+bytes   764646
+pages   15  →  46 chunks
+```
+
+Without the file, `tools/evaluate.py`, `tools/measure.py` and the `@needs_fixture` tests skip
+rather than fail, and the report says "not measured" rather than quoting a number. See
+[docs/15 §7.8](docs/15_PROGRESS_TRACKER.md).
 
 Use the pinned interpreter. `C:\Python314\python.exe` happens to have most of the stack, but the
-**verified** environment is `.venv`, and that is where all 449 passing tests were observed.
+**verified** environment is `.venv`, and that is where all 512 passing tests were observed.
 
 ## Licence and attribution
 

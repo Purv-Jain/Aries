@@ -1,0 +1,95 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R 6 0 R 8 0 R 10 0 R] /Count 4 >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endobj
+5 0 obj
+<< /Length 668 >>
+stream
+BT /F1 11 Tf 72 720 Td 14 TL
+(7.1 Detector Response by Band) Tj T*
+(The table below lists the calibrated response of each band.) Tj T*
+(Band        Target        Measured     Residual    Status) Tj T*
+(-----       ------        --------     --------    ------) Tj T*
+(alpha       1.00          1.004        +0.004      pass) Tj T*
+(beta        2.50          2.487        -0.013      pass) Tj T*
+(gamma       0.75          0.751        +0.001      pass) Tj T*
+(delta       3.20          3.196        -0.004      pass) Tj T*
+(epsilon     1.80          1.802        +0.002      pass) Tj T*
+(Every band passed. The largest residual was observed in the beta band.) Tj T*
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 7 0 R >>
+endobj
+7 0 obj
+<< /Length 402 >>
+stream
+BT /F1 11 Tf 72 720 Td 14 TL
+(4.2 Sampling Strategy) Tj T*
+(Samples were drawn every ninety seconds over a six hour acquisition window.) Tj T*
+(The sampler discards the first reading of each window as a settling artefact.) Tj T*
+(Drift correction is applied before the samples are averaged, not afterwards.) Tj T*
+(Averaging first would fold the drift into every mean and hide the correction.) Tj T*
+ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 9 0 R >>
+endobj
+9 0 obj
+<< /Length 411 >>
+stream
+BT /F1 11 Tf 72 720 Td 14 TL
+(5.1 Noise Characteristics) Tj T*
+(Thermal noise dominates below the detector's threshold and cannot be calibrated away.) Tj T*
+(Shot noise scales with the square root of the exposure time at low flux.) Tj T*
+(Both sources are reported separately rather than combined into one figure.) Tj T*
+(Combining them would hide which one dominates under the conditions that matter.) Tj T*
+ET
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 11 0 R >>
+endobj
+11 0 obj
+<< /Length 419 >>
+stream
+BT /F1 11 Tf 72 720 Td 14 TL
+(6.3 Reproducibility Statement) Tj T*
+(Every figure in this report was produced by the pipeline committed alongside it.) Tj T*
+(No number in this report was transcribed by hand from a previous version.) Tj T*
+(The deterministic profile requires no network access and no downloaded weights.) Tj T*
+(The same input therefore yields the same output on any machine that runs the code.) Tj T*
+ET
+endstream
+endobj
+xref
+0 12
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000140 00000 n 
+0000000237 00000 n 
+0000000363 00000 n 
+0000001082 00000 n 
+0000001208 00000 n 
+0000001661 00000 n 
+0000001787 00000 n 
+0000002249 00000 n 
+0000002377 00000 n 
+trailer
+<< /Size 12 /Root 1 0 R >>
+startxref
+2848
+%%EOF

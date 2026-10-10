@@ -200,7 +200,7 @@ support score and retrieval relevance as **separately labelled rows**.
 
 ## 10. Testing
 
-**449 tests, 449 passed, 0 failed, 0 skipped, 0 xfailed**, plus the 6 `semantic` tests passing separately. Captured output:
+**512 tests, 512 passed, 0 failed, 0 skipped, 0 xfailed** on the machine that holds the calibration report, **plus the 6 `semantic` tests passing separately**. On a machine without it: 492 passed, 20 skipped, each skip stating its reason. Both numbers are reported because the difference is the calibration fixture and nothing else. Captured output:
 [logs/02_test_suite_offline.txt](../logs/02_test_suite_offline.txt).
 
 | Suite | Tests | Covers |
@@ -212,6 +212,37 @@ support score and retrieval relevance as **separately labelled rows**.
 | `test_hardening.py` | 64 | evaluation integrity, calibration, **abstention-gate and antonym-branch measurement**, security sweep, determinism, metrics, CLI, cross-platform paths, CI config |
 
 All 17 mandated edge cases and all 20 contract tests are covered.
+
+### 10b. Does it work on a report nobody here has read?
+
+Every measurement above is against one document: the team's own Stage 2 report. That is the right
+thing to calibrate on and it is *one* document. A **synthetic fixture corpus** of nine PDFs —
+35 KB, every byte generated from literal strings, no third party's document, no names, no PRNs —
+covers documented extraction hazards: two-column pages, space-padded tables, a page far longer than
+normal, hyphenation, non-ASCII typography, a running header on every page, a scanned page with no
+text layer, and an encrypted file.
+
+For each layout, **63 tests** assert the whole path rather than ingestion alone: pages come out,
+page numbers are contiguous and one-based, every citation resolves, no claim is `Verified` without
+one, retrieval finds the page the answer is on, output is byte-identical across three runs, and the
+two unreadable inputs are **refused with a stated reason** instead of silently misread.
+
+The check that matters most is not a smoke test: **abstention still fires** on a topic absent from
+each of those documents. The coverage floor was calibrated on the Stage 2 report; if it only worked
+there, it would be a property of that document rather than of the system. It does not.
+
+`TestWhatThisSuiteDoesNotClaim` names six uncovered hazards and asserts each appears in the test
+module's own docstring, so the coverage claim cannot drift from the code. **Nine synthetic fixtures
+are not nine real papers.** The claim is "no error on the hazards listed", not "works on every
+research report".
+
+Writing those fixtures found a defect — in the **test harness**, not the product. A `unicode` fixture
+came back with the em dash and both curly quotes lost, while the surrounding English read perfectly.
+Inspecting the raw content-stream bytes rather than the extracted text located it: the stream held
+literal `?` characters, because the builder encoded as ISO-8859-1 against a font declaring
+`/WinAnsiEncoding`. Those are different codecs, and those three characters are absent from ISO-8859-1
+entirely. Accented letters survived precisely because they *are* in ISO-8859-1, which is why it looked
+like an extraction bug and was not one. Fixed by encoding as cp1252.
 
 **The six `semantic`-marked tests were run on 2026-10-10 and all six pass** — 38.4 s on CPU. They
 needed `HF_HUB_DISABLE_XET=1`, because the default Hugging Face transport stalled indefinitely on

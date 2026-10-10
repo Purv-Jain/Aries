@@ -1,0 +1,109 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endstream
+endobj
+2 0 obj
+<< /Type /Pages /Kids [4 0 R 6 0 R 8 0 R 10 0 R] /Count 4 >>
+endstream
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endstream
+endobj
+4 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 5 0 R >>
+endstream
+endobj
+5 0 obj
+<< /Length 471 >>
+stream
+BT /F1 10 Tf
+1 0 0 1 56 700 Tm
+(3.1 Calibration Procedure) Tj 0 -12 Td
+(The spectrometer was calibrated against a reference lamp before each session.) Tj 0 -12 Td
+(Calibration coefficients are stored alongside the raw readings, never inside them.) Tj 0 -12 Td
+1 0 0 1 320 700 Tm
+(A drifted calibration is detected by comparing the reference lamp response to its) Tj 0 -12 Td
+(recorded baseline, and a drift above two percent triggers a full recalibration.) Tj 0 -12 Td
+ET
+endstream
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 7 0 R >>
+endstream
+endobj
+7 0 obj
+<< /Length 453 >>
+stream
+BT /F1 10 Tf
+1 0 0 1 56 700 Tm
+(4.2 Sampling Strategy) Tj 0 -12 Td
+(Samples were drawn every ninety seconds over a six hour acquisition window.) Tj 0 -12 Td
+(The sampler discards the first reading of each window as a settling artefact.) Tj 0 -12 Td
+1 0 0 1 320 700 Tm
+(Drift correction is applied before the samples are averaged, not afterwards.) Tj 0 -12 Td
+(Averaging first would fold the drift into every mean and hide the correction.) Tj 0 -12 Td
+ET
+endstream
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 9 0 R >>
+endstream
+endobj
+9 0 obj
+<< /Length 462 >>
+stream
+BT /F1 10 Tf
+1 0 0 1 56 700 Tm
+(5.1 Noise Characteristics) Tj 0 -12 Td
+(Thermal noise dominates below the detector's threshold and cannot be calibrated away.) Tj 0 -12 Td
+(Shot noise scales with the square root of the exposure time at low flux.) Tj 0 -12 Td
+1 0 0 1 320 700 Tm
+(Both sources are reported separately rather than combined into one figure.) Tj 0 -12 Td
+(Combining them would hide which one dominates under the conditions that matter.) Tj 0 -12 Td
+ET
+endstream
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents 11 0 R >>
+endstream
+endobj
+11 0 obj
+<< /Length 470 >>
+stream
+BT /F1 10 Tf
+1 0 0 1 56 700 Tm
+(6.3 Reproducibility Statement) Tj 0 -12 Td
+(Every figure in this report was produced by the pipeline committed alongside it.) Tj 0 -12 Td
+(No number in this report was transcribed by hand from a previous version.) Tj 0 -12 Td
+1 0 0 1 320 700 Tm
+(The deterministic profile requires no network access and no downloaded weights.) Tj 0 -12 Td
+(The same input therefore yields the same output on any machine that runs the code.) Tj 0 -12 Td
+ET
+endstream
+endstream
+endobj
+xref
+0 12
+0000000000 65535 f 
+0000000015 00000 n 
+0000000074 00000 n 
+0000000160 00000 n 
+0000000267 00000 n 
+0000000403 00000 n 
+0000000935 00000 n 
+0000001071 00000 n 
+0000001585 00000 n 
+0000001721 00000 n 
+0000002244 00000 n 
+0000002382 00000 n 
+trailer
+<< /Size 12 /Root 1 0 R >>
+startxref
+2914
+%%EOF
