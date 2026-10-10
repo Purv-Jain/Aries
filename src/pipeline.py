@@ -24,11 +24,13 @@ Three behaviours here are contractual, not incidental:
 
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Sequence
 from pathlib import Path
 
-from src.chunking import chunk_pages
+from src.advisor import advise
+from src.chunking import chunk_pages, light_stem
 from src.embeddings import (
     EmbeddingBackend,
     EmbeddingBackendUnavailable,
@@ -39,11 +41,13 @@ from src.generator import (
     AnswerGenerator,
     build_generator,
     insufficient_evidence_answer,
+    api_key_is_configured,
 )
 from src.models import (
     USER_MESSAGES,
     AnswerResponse,
     ClaimVerification,
+    CorrectionPlan,
     CoverageReport,
     DocumentPage,
     DocumentSummary,
@@ -62,7 +66,56 @@ from src.pdf_ingestion import PDFIngestionError, load_document
 from src.vector_store import VectorStore, build_vector_store
 from src.verifier import Verifier, content_tokens
 
-__all__ = ["ResearchPipeline", "PipelineConfig", "summarise", "query_coverage"]
+__all__ = [
+    "ResearchPipeline",
+    "PipelineConfig",
+    "summarise",
+    "query_coverage",
+    "hosted_profile_available",
+]
+
+
+def hosted_profile_available() -> bool:
+    """True when the hosted generator could actually run here.
+
+    Re-exported from `pipeline` rather than imported by the UI from `generator`, because FR-47
+    makes the pipeline the only module the view layer is allowed to reach. The UI needs to know
+    whether to *offer* the hosted profile, and this is the supported way to ask.
+
+    Offering a profile that would silently degrade would be worse than not offering it, so this
+    returns False rather than optimistically True when the key is merely present but the model
+    list could not be fetched.
+    """
+    return api_key_is_configured()
+
+
+# Question scaffolding: the verbs, quantifiers and generic nouns that appear in *how a question is
+# phrased* rather than *what it is about*. They carry no topical signal, so counting them as content
+# terms dilutes the very ratio the gate depends on.
+#
+# Measured with the committed synthetic fixture, floor 0.50: on 10 answerable-paraphrase
+# questions, stemming both sides plus dropping these terms moved the answered-rate from 4/10 to
+# 8/10, and all 6 out-of-topic questions stayed refused. The words are deliberately few and
+# generic; anything document-specific belongs in the document, not here, because a term removed
+# from the denominator is a term that can never contribute evidence for an answer.
+#
+# The two remaining refusals are honest limits, not tuning failures: one asks about a synonym the
+# document does not use (`tuned` where the document says `calibrated`), and one sits exactly on the
+# 0.50 boundary. Raising the floor would trade a measured 0.000 false-abstention rate for them.
+_QUESTION_SCAFFOLDING: frozenset[str] = frozenset(
+    """
+    much many more most less least often always never ever still already
+    happen happens happened occur occurs occurred appear appears appeared
+    pass passes passed between among during through over under above below
+    list listed lists show shows shown give gives given make makes made
+    use uses used using take takes took get gets got need needs needed
+    kind sort type way ways thing things
+    """.split()
+)
+
+# Alphanumeric runs, matching the tokenisation `content_tokens` already applies to the question.
+# Both sides of the comparison must be split the same way or stems would not line up.
+_COVERAGE_WORD = re.compile(r"[a-z0-9]+")
 
 
 def query_coverage(
@@ -82,31 +135,72 @@ def query_coverage(
     measures *register* more than *relevance*.
 
     Coverage asks the question the gate actually needs answered: are the distinctive
-    words of this question present in what we retrieved. Answerable coverage bottoms out
-    at 0.667 and unanswerable coverage tops out at 0.250, which leaves a real gap to
-    place a threshold in.
+    words of this question present in what we retrieved.
 
-    **Matching is substring containment, not token equality.** `content_tokens` drops
-    stopwords and short tokens from the question, but the haystack is lowercased text and
-    searched with `in`. That makes `chunk` match `chunking`, which is wanted, at the cost
-    of `cost` matching `costly`. Documented rather than defended: the alternative is a
-    stemmer, and a stemmer is more machinery than this gap justifies.
+    **Both sides of the comparison are stemmed, and that is what makes the measure
+    morphological rather than literal.** The original implementation compared raw content
+    tokens to the raw passage text with substring containment, so `readings` did not match
+    `reading` and `figures` did not match `figure`. Measured against the committed
+    synthetic fixture at the 0.50 floor, that refused 6 of 10 *answerable* paraphrase
+    questions -- a real cost, not a rounding error.
+
+    Stemming the question terms and the passage tokens through the same `light_stem`
+    fixes the morphology. It is not monotonic in the coverage ratio, though, and the
+    reason is worth recording: substring matching was what the old code used, and once
+    `lights` reduces to `light`, that stem matched "lightweight" and answered "What causes
+    the northern lights?" from a document about neither. So the match is now **token
+    equality over stems**. Nothing is lost by it -- stemming already makes `chunk` agree
+    with `chunking` on its own -- and the spurious prefix matches go away.
+
+    **Two independent reductions, one signal.** Besides stemming, question scaffolding
+    (`much`, `happens`, `listed`, ...) is removed before the ratio is taken, because those
+    words describe the phrasing of a question rather than its subject. See
+    `_QUESTION_SCAFFOLDING`.
+
+    What this deliberately does **not** do is handle synonymy: a passage saying `calibrated`
+    does not match a question saying `tuned`, and coverage scores that zero. Two of the ten
+    probe questions stay refused after this change, one for that reason and one on the 0.50
+    boundary. Closing the first needs entailment, not a longer normalisation table, and it is
+    recorded as a limit rather than papered over.
 
     Returns `covered` and `missing` so the refusal can name them. A gate that reports only
     a score asks the user to trust a number they cannot inspect.
     """
-    terms = content_tokens(question)
-    if not terms:
-        return CoverageReport(covered=(), missing=())
     if scope == "top":
         pool = retrieved[:1]
     elif scope == "retrieved":
         pool = retrieved
     else:
         raise ValueError(f"unknown coverage scope: {scope!r}; expected 'retrieved' or 'top'")
-    haystack = " ".join(result.chunk.text for result in pool).lower()
-    covered = tuple(sorted(term for term in terms if term in haystack))
-    missing = tuple(sorted(term for term in terms if term not in haystack))
+
+    # Terms are reduced to stems for matching, but the report carries the **words the user
+    # actually typed**. Showing a stem would put `boil` in the refusal message for a user who
+    # asked about "boiling", which is both unhelpful and simply untrue -- the report is quoted
+    # back to them in `insufficient_evidence_answer` and is meant to be checkable against their
+    # own question. A test asserts the verbatim term survives to the UI.
+    surface_terms = {
+        term for term in content_tokens(question) if term not in _QUESTION_SCAFFOLDING
+    }
+    terms = {light_stem(term) for term in surface_terms}
+    if not terms:
+        return CoverageReport(covered=(), missing=())
+
+    # Token equality over stems, not substring containment. Substring matching was the previous
+    # behaviour and it had to go: with stemming in front of it, `lights` reduces to `light`, which
+    # then matched "lightweight" anywhere in the corpus and answered "What causes the northern
+    # lights?" from a document about neither. Stemming already makes `chunk` and `chunking` agree
+    # on their own, so the prefix overlap that substring matching was there to provide is no longer
+    # needed, and its false positives are the only thing it still contributes.
+    pool_stems = {
+        light_stem(token)
+        for result in pool
+        for token in _COVERAGE_WORD.findall(result.chunk.text.lower())
+    }
+    covered_stems = terms & pool_stems
+    covered = tuple(sorted(term for term in surface_terms if light_stem(term) in covered_stems))
+    missing = tuple(
+        sorted(term for term in surface_terms if light_stem(term) not in covered_stems)
+    )
     return CoverageReport(covered=covered, missing=missing)
 
 
@@ -260,8 +354,13 @@ class ResearchPipeline:
                 f"between {self._config.store!r} and {config.store!r}"
             )
         self._config = config
-        self._backend = build_embedding_backend(config.embedding_backend)
-        self._store.set_similarity(self._backend.similarity, self._backend.name)
+        # Only rebuild the backend when the profile genuinely changed. Rebuilding it unconditionally
+        # threw away the fitted TF-IDF vocabulary while the store kept its chunks, so the UI passed
+        # its "is the index empty?" check and the next query died with `has not been fitted`. Two
+        # pieces of state that must agree were being told different stories.
+        if config.embedding_backend != self._backend.name:
+            self._backend = build_embedding_backend(config.embedding_backend)
+            self._store.set_similarity(self._backend.similarity, self._backend.name)
         self._generator = build_generator(config.generator)
         self._verifier = Verifier(similarity_fn=self._claim_similarity)
         self._degraded_reason = None
@@ -621,12 +720,18 @@ class ResearchPipeline:
         verify_ms: float,
         warnings: Sequence[str],
     ) -> AnswerResponse:
+        summary = summarise(answer, verifications)
         return AnswerResponse(
             question=question,
             answer=answer,
             retrieved=retrieved,
             verifications=verifications,
-            summary=summarise(answer, verifications),
+            summary=summary,
+            # Corrections are derived here, from the verifications just computed, so the advice and
+            # the labels cannot disagree. An abstained answer produces no verifications and
+            # therefore no corrections, which is correct: nothing was checked, so there is nothing
+            # to advise about. `advise` is pure, so this costs no I/O and is safe on the hot path.
+            corrections=advise(verifications, headline=summary.headline),
             metrics=QueryMetrics(
                 embed_ms=embed_ms,
                 retrieve_ms=retrieve_ms,
@@ -639,6 +744,19 @@ class ResearchPipeline:
             ),
             warnings=tuple(dict.fromkeys(warnings)),
         )
+
+    # -- citation audit -------------------------------------------------------
+
+    def review(self, answer: AnswerResponse) -> CorrectionPlan:
+        """Re-derive the correction plan for a response already in hand.
+
+        Exists so the UI can offer "check this answer again" without re-running the query, and so a
+        caller holding a response from elsewhere can obtain the same advice the pipeline produced.
+        It reads `answer.verifications` and nothing else -- in particular it does not re-verify,
+        because a second verification pass over the same data would produce the same labels and
+        calling it "re-checking" would misrepresent what happened.
+        """
+        return advise(answer.verifications, headline=answer.summary.headline)
 
     # -- retrieval ------------------------------------------------------------
 

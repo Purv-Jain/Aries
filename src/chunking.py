@@ -28,7 +28,7 @@ from collections.abc import Sequence
 
 from src.models import ChunkConfig, DocumentPage, EvidenceChunk, compute_chunk_id
 
-__all__ = ["split_sentences", "chunk_page", "chunk_pages"]
+__all__ = ["split_sentences", "chunk_page", "chunk_pages", "light_stem"]
 
 # Abbreviations whose trailing period does not end a sentence (ADR-0003).
 # "No." and "Fig." are the ones that actually break naive splitters in academic
@@ -190,3 +190,113 @@ def chunk_pages(
     for page in pages:
         chunks.extend(chunk_page(page, config))
     return tuple(chunks)
+
+
+# -- light stemming ---------------------------------------------------------
+#
+# Suffix stripping, not the Porter algorithm. Both live here rather than in `pipeline` because
+# this is the same kind of responsibility as `split_sentences`: reducing text to a comparable form.
+# Keeping it beside the sentence splitter means one module owns "how this project normalises prose".
+
+# (suffix stripped, what replaces it, minimum length the remainder must keep)
+#
+# The minimum length is the only guard there is, and it does real work. "s" alone would reduce
+# `is` to `i` and `was` to `wa`, which collapses distinct words and makes coverage claim a match
+# that is not one. Refusing to strip below four characters leaves short words alone, which is why
+# every English function word -- whose absence from the question's meaning matters least -- survives
+# untouched.
+_STEM_RULES: tuple[tuple[str, str, int], ...] = (
+    ("ization", "ize", 4),
+    ("ational", "ate", 4),
+    ("iveness", "ive", 4),
+    ("fulness", "ful", 4),
+    ("ousness", "ous", 4),
+    ("ements", "ement", 4),
+    ("ities", "ity", 3),
+    ("ility", "ile", 3),
+    ("ement", "", 4),
+    ("ments", "", 4),
+    ("ation", "ate", 4),
+    ("ition", "ite", 4),
+    ("ally", "", 4),
+    ("ical", "ic", 4),
+    ("ness", "", 4),
+    ("ies", "y", 3),
+    ("ied", "y", 3),
+    ("ing", "", 4),
+    ("ers", "", 4),
+    ("est", "", 4),
+    ("ed", "", 4),
+    ("ly", "", 4),
+    ("es", "", 4),
+    ("er", "", 4),
+    ("al", "", 4),
+    ("s", "", 4),
+)
+
+_DOUBLE_ENDING = ("bb", "dd", "ff", "gg", "mm", "nn", "pp", "rr", "tt")
+
+# A word's silent `e` is always removed once it is longer than four characters, so that the two
+# sides of every comparison pass through the identical transform: `figure` and `figures` both
+# reach `figur`, `create` and `created` both reach `creat`. Asymmetric normalisation would defeat
+# the entire point -- a stem that reduces one variant and not the other matches neither.
+# The length guard keeps short words intact, so `where` -> `wher` rather than `where` -> `where`,
+# which is harmless because `where` is a stopword and never reaches this function.
+_TERMINAL_E = re.compile(r"e$")
+
+
+def light_stem(word: str) -> str:
+    """Reduce an English word to a stem for comparison. Deterministic and offline.
+
+    **Why this exists, as a measurement rather than a preference.** The abstention gate matched
+    question terms against retrieved text with substring containment, so `readings` did not match
+    `reading` and `figures` did not match `figure`. Asked "How much time passes between successive
+    readings?" of a document that says *every ninety seconds*, coverage came back 0.40 against a
+    floor of 0.50 and a correctly answerable question was refused. Measured over 10 answerable
+    paraphrased questions, the gate refused 6 before this function existed.
+
+    **What stemming does and does not fix.** It fixes morphology: `readings`/`reading`,
+    `figures`/`figure`, `verified`/`verify`. It does *not* fix synonyms: the document saying
+    `calibrated` while the question says `tuned` still scores zero. One case out of the 10 remains
+    refused after this change, for exactly that reason. Closing it needs an entailment model, not a
+    longer suffix table, and it is recorded as a limit rather than papered over with a bigger list.
+
+    **Deliberately not the Porter algorithm.** Porter's five phases and its exception tables are
+    worth more than this needs: they were built for lemmatisation quality, and this is a coverage
+    *signal* where an imperfect stem is sufficient. A 30-line table that is inspectable at a viva
+    beats a dependency the project cannot explain.
+
+    Words of four characters or fewer are returned unchanged, so short function words survive.
+    Only the first matching rule applies, and the rules are ordered longest-first, so
+    `ization` is never reached by way of `ations`.
+    """
+    if len(word) <= 3 or not word.isalpha():
+        return word
+    # Cascaded, not single-pass. A plural must be able to reach the same form its base word
+    # already reaches: `reading` reduces to `read` in one step, so `readings` has to be able to
+    # get there too, and stripping only `s` leaves it stranded at `reading`. Bounded at three
+    # passes because every rule is subtractive; a longer chain buys nothing for English academic
+    # prose and each extra pass is another chance to over-strip a short word.
+    reduced = word
+    for _ in range(3):
+        nxt = _apply_rules(reduced)
+        if nxt == reduced:
+            break
+        reduced = nxt
+    return _TERMINAL_E.sub("", reduced) if len(reduced) > 4 else reduced
+
+
+def _apply_rules(word: str) -> str:
+    """Strip the first matching suffix, or return the word unchanged."""
+    for suffix, replacement, minimum in _STEM_RULES:
+        if not word.endswith(suffix):
+            continue
+        stem = word[: -len(suffix)]
+        if len(stem) < minimum:
+            continue
+        if not replacement and stem[-2:] in _DOUBLE_ENDING and len(stem) > 3:
+            # "running" -> "runn" -> "run", "stopped" -> "stop". Without this a doubled
+            # consonant survives and the stem stops matching its own base form.
+            stem = stem[:-1]
+        return (stem + replacement) or word
+    return word

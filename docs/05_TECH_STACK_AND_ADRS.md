@@ -423,3 +423,112 @@ introduce a detection. It is a lexical proxy for "about the same thing", not a p
 passage that are genuinely about the same subject using entirely different vocabulary will still be
 missed.
 
+
+---
+
+## ADR-0016 — A hosted model is an optional profile, not a dependency
+
+**Status:** Accepted
+
+**Context.** The product direction is: upload any document, retrieve, answer with citations, and
+check whether those citations hold up. Answer *quality* is bounded by the generator, and the
+extractive generator can only quote sentences already present in the retrieved passage. It cannot
+paraphrase, cannot synthesise across passages, and cannot answer a question whose answer is assembled
+from three different pages. That is a real ceiling, and it is a ceiling on the part of the product
+users perceive as "the assistant".
+
+The obvious fix is a stronger model behind the same RAG pipeline. That has been declined twice
+already on the grounds that it weakens the guarantees this project rests on. Those objections are
+recorded below rather than argued away, because two of them still stand.
+
+**What was accepted, and why it does not break the guarantees.**
+
+1. **The offline default is untouched.** `ExtractiveGenerator` remains the default; a fresh clone
+   reproduces every number in the report with no key and no network. The hosted profile is selected
+   explicitly, per deployment.
+2. **The generator signature is the enforcement.** `generate(question, evidence, max_sentences)`
+   hands the hosted model the *same* retrieved passages and nothing else. It cannot see the corpus,
+   the file paths, or any other document. "Related to uploaded documents only" is therefore a
+   property of the interface, not a promise in a prompt.
+3. **The model is never trusted about its own citations.** Brackets in the model—s output are
+   *stripped* before claims are built, and every claim is re-attributed to a retrieved chunk by the
+   same lexical rule the local generators use. The verifier then re-resolves every marker
+   independently. A model that writes `[S7, p.2]` when it was given only `S1` gets no such marker.
+4. **Every failure degrades to extractive with a recorded reason.** No key, 401, 429, unreachable
+   host, non-JSON body, missing content, unattributable text. The answer carries `degraded=True` and
+   the reason, so a degraded run never looks like a full run.
+5. **The key never enters a config, a log, a screenshot or a `repr`.** It is read from
+   `OPENROUTER_API_KEY` at call time and not retained. `test_repr_never_contains_the_key` and
+   `test_a_failure_message_never_contains_the_key` are the enforcement.
+
+**What is genuinely weaker, and is not claimed away.**
+
+* **Determinism.** NFR-03 is scoped to the offline profile. `temperature=0` and `seed=0` are sent
+  and make most hosted answers stable, but hosted inference is not *guaranteed* deterministic and the
+  report must not say it is.
+* **An abstractive generator drifts from its evidence.** This is the failure the project exists to
+  detect (R-08), and adopting a hosted model makes it more likely rather than less. The mitigation
+  is that the verifier is unchanged and still labels every claim, but the honest position is that
+  *verification quality on hosted answers is unmeasured* until someone runs the labelled set through
+  this profile. It is listed as `not measured` in [10](10_EVALUATION_METRICS.md) rather than assumed
+  to transfer from the extractive profile — the two produce different claim distributions, and an
+  extractive claim is a near-substring of its passage while a hosted one is not.
+
+**The free-tier default is a verified fact, not a memory.** `DEFAULT_REMOTE_MODEL` was taken from
+the live catalogue at `https://openrouter.ai/api/v1/models`: 458 models, **15** carry `:free` and
+price at `{"prompt": "0", "completion": "0"}`. **None are from meta-llama, qwen, deepseek,
+mistralai or openai** — all of which are the ids most tutorials still name, so shipping one of
+those as a default would ship a broken default. `google/gemma-4-26b-a4b-it:free` is present,
+instruction-tuned, with a 262,144-token context. It will go stale; a dead id degrades rather than
+crashes, and the model is overridable so fixing it needs no code change.
+`test_the_default_model_is_a_free_one` fails the build if a paid id is ever made the default.
+
+**Consequence.** `tests/test_hardening.py::TestSecuritySweep::test_sec08` previously asserted that
+`generator.py` imports no HTTP client. That premise is now false by decision, so the test was
+restated rather than deleted: `embeddings.py` still may not import one, a new test pins the network
+surface to exactly one call site, and another asserts the default config never constructs the hosted
+generator. A sweep that merely permitted the import without pinning reachability would be weaker
+than the one it replaces.
+
+---
+
+## ADR-0017 — The advisor suggests; it never edits
+
+**Status:** Accepted
+
+**Context.** The verifier produces three labels and a reason code. That answers "what did the system
+find" and leaves the user to work out what to do, which is the least useful possible output for
+someone trying to fix a document. The product requirement is that a flagged citation comes with a
+correction.
+
+The tempting version has the system rewrite the claim automatically. That is refused outright:
+silently altering a claim and its citation would destroy the traceability guarantee the entire
+project exists to provide, and a user who cannot tell what changed cannot check what changed.
+
+**Decision.** `src/advisor.py` maps each `Reason` to an action code plus a specific sentence, and
+builds a pasteable prompt for a general-purpose assistant. It never modifies the answer, never
+mutates a document, and never re-verifies.
+
+Two conservative choices are deliberate and tested:
+
+* **`weak_support` produces no action.** Low lexical overlap is the *documented* weakness of a
+  containment-based score on paraphrase (D-26), not evidence of an error. Recommending changes for
+  correct paraphrases would train users to ignore the advice, and advice that is routinely wrong is
+  worse than none.
+* **`no_support` recommends removing the claim**, not rewording it. Zero shared vocabulary is not a
+  wording problem; rewording will not make a claim about one subject match a passage about another.
+
+**The repair prompt carries an instruction, not just a request.** It tells the assistant to keep
+every number, date, unit and proper noun exactly as the source states them, and never to introduce a
+figure not present in the passage. The most damaging "improvement" to a citation is a fluent sentence
+with an invented number in it — a rewrite that would pass every check in this system while being
+wrong. The prompt is built only from the claim and the retrieved passage, never from the document as
+a whole, so it cannot smuggle in context the user has not seen.
+
+**Consequence.** `weak_support` and `supported` yield an empty plan rather than a row saying "no
+action needed". An answer with nothing wrong and an answer that was never checked are different
+facts, and the UI renders them differently: `AnswerResponse.corrections` is empty in both cases, but
+`advise([])` returns an empty `summary_prompt` while `advise([supported])` returns a positive one.
+The limit is stated rather than hidden: **this cannot tell whether the *source* is right.** It
+compares a claim with the passage that claim cites; if the document itself is wrong, a perfectly
+supported citation is still wrong and nothing here detects that.

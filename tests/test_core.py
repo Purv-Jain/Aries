@@ -13,15 +13,18 @@ written under pytest's `tmp_path`.
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
 from pypdf import PdfReader
 
 from src.chunking import chunk_page, chunk_pages, split_sentences
+from src.pipeline import ResearchPipeline
 from src.models import (
     ChunkConfig,
     DocumentPage,
+    PipelineConfig,
     Reason,
     ResourceLimits,
     compute_chunk_id,
@@ -492,6 +495,96 @@ class TestMultiDocument:
             for chunk in chunk_pages(pages):
                 assert chunk.source_id == source_id
                 assert chunk.page_number <= len(pages)
+
+
+class TestReconfigure:
+    """Regression cover for a real crash.
+
+    `reconfigure()` used to rebuild the embedding backend unconditionally. It therefore threw away
+    the fitted TF-IDF vocabulary while the store kept its chunks, so the UI's "is the index empty?"
+    check passed and the next query died with `EmbeddingBackendUnavailable: ... has not been
+    fitted`. Reachable in the app by any sidebar edit, most easily by setting an API key and so
+    gaining the generator selector. The invariant is the sentence "the store is non-empty if and
+    only if the backend can score a query", so it is asserted directly rather than per-setting.
+    """
+
+    @staticmethod
+    def _indexed(valid_pdf: Path) -> ResearchPipeline:
+        pipeline = ResearchPipeline(PipelineConfig(embedding_backend="tfidf", store="memory"))
+        pipeline.index([valid_pdf])
+        return pipeline
+
+    def test_the_backend_survives_a_settings_change(self, valid_pdf: Path) -> None:
+        """The exact crash: index, change a threshold, ask again."""
+        pipeline = self._indexed(valid_pdf)
+        before = pipeline.index_stats().total_chunks
+        assert before > 0
+
+        pipeline.reconfigure(
+            replace(
+                pipeline.config,
+                verification=replace(
+                    pipeline.config.verification, verified_threshold=0.70
+                ),
+            )
+        )
+
+        assert pipeline.index_stats().total_chunks == before, "the index must survive a settings change"
+        response = pipeline.ask("What does the report describe?")
+        assert response.retrieved, "a query after reconfigure must still retrieve evidence"
+
+    def test_changing_the_generator_does_not_unfit_the_backend(self, valid_pdf: Path) -> None:
+        """How the crash was actually reached in the app: the generator selector appears."""
+        pipeline = self._indexed(valid_pdf)
+        pipeline.reconfigure(replace(pipeline.config, generator="openrouter"))
+
+        assert pipeline.index_stats().total_chunks > 0
+        assert pipeline.ask("What does the report describe?").retrieved
+
+    @pytest.mark.parametrize(
+        "mutate",
+        [
+            pytest.param(lambda c: replace(c, top_k=8), id="top_k"),
+            pytest.param(
+                lambda c: replace(c, chunk=replace(c.chunk, chunk_words=140)), id="chunk_size"
+            ),
+            pytest.param(lambda c: replace(c, generator="extractive"), id="generator"),
+        ],
+    )
+    def test_no_settings_change_orphans_the_index(
+        self, valid_pdf: Path, mutate
+    ) -> None:
+        pipeline = self._indexed(valid_pdf)
+        before = pipeline.index_stats().total_chunks
+
+        pipeline.reconfigure(mutate(pipeline.config))
+
+        assert pipeline.index_stats().total_chunks == before
+        assert pipeline.ask("What does the report describe?").retrieved, (
+            "an index with chunks but an unfitted backend cannot answer, and the UI only checks "
+            "the store -- so this is the state that produced a raw traceback in the app"
+        )
+
+    def test_switching_the_backend_still_drops_a_populated_index(self, valid_pdf: Path) -> None:
+        """The other half of the contract: a real backend change must not keep old vectors.
+
+        Vectors from two different backends live in different spaces, so keeping them would make
+        every score meaningless while still looking populated.
+        """
+        pipeline = self._indexed(valid_pdf)
+        assert pipeline.index_stats().total_chunks > 0
+
+        pipeline.reconfigure(replace(pipeline.config, embedding_backend="minilm"))
+
+        assert pipeline.index_stats().total_chunks == 0
+
+    def test_the_index_survives_on_a_real_backend_change_with_no_chunks(self) -> None:
+        """Empty in, empty out -- no reset needed, and no crash either."""
+        pipeline = ResearchPipeline(PipelineConfig(embedding_backend="tfidf", store="memory"))
+
+        pipeline.reconfigure(replace(pipeline.config, embedding_backend="minilm"))
+
+        assert pipeline.index_stats().total_chunks == 0
 
 
 def test_document_page_rejects_an_impossible_page_number() -> None:

@@ -692,3 +692,97 @@ These must exist and pass. They are the reason the contracts are trustworthy.
 | CT-18 | `ask("")` and `ask("   ")` raise `ValueError` | FR-23 |
 | CT-19 | `PipelineConfig` weights not summing to 1.0 raise | §9.1 |
 | CT-20 | `app.py` imports nothing from a leaf `src` module except dataclasses | FR-47 |
+
+---
+
+## 13. Hosted-profile and advisor contracts (added 2026-10-11)
+
+### 13.1 `OpenRouterGenerator`
+
+Implements the existing `AnswerGenerator` protocol unchanged. No new type is introduced for the
+generator itself, which is the point: the pipeline holds one protocol, so adding a hosted profile
+did not add a branch to the orchestration layer.
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `model_name` | `str` | `DEFAULT_REMOTE_MODEL` | must end `:free`; enforced by test |
+| `fallback` | `AnswerGenerator` | `ExtractiveGenerator()` | used on every failure |
+| `timeout` | `float` | `30.0` | seconds |
+| `max_attempts` | `int` | `2` | one retry, rate limits only |
+| `api_key` | `str \| None` | `None` | **tests only**; production reads the environment |
+| `transport` | `Callable \| None` | `None` | **tests only**; injects a fake HTTP layer |
+
+**Invariants**
+
+| ID | Invariant |
+|---|---|
+| HC-1 | The key is read from `OPENROUTER_API_KEY` at call time and never stored on the instance. |
+| HC-2 | `repr()` can never contain the key. |
+| HC-3 | No exception message, note, or `degraded_reason` can contain the key. |
+| HC-4 | No file path or filename reaches the prompt; only page number and chunk text. |
+| HC-5 | Markers in the model—s output are stripped, then re-attributed lexically. |
+| HC-6 | Every failure mode sets `degraded=True` and yields the extractive answer. |
+| HC-7 | `temperature=0` and `seed=0` are always sent. |
+| HC-8 | `NOT IN PASSAGES` in the reply is honoured as an abstention. |
+| HC-9 | Text that cannot be attributed to any retrieved chunk is discarded, not shown uncited. |
+
+`RemoteModelCatalog.free_models()` returns a tuple and never raises; an empty tuple means *unknown*,
+never *there are none*. The cache is one hour, per process.
+
+### 13.2 `Correction`
+
+| Field | Type | Notes |
+|---|---|---|
+| `claim_id` | `str` | the claim this is about |
+| `claim_text` | `str` | verbatim claim text, markers stripped |
+| `action` | `str` | one of `CORRECTION_ACTIONS` |
+| `suggestion` | `str` | one specific, actionable sentence |
+| `repair_prompt` | `str` | pasteable prompt; built only from claim + retrieved passage |
+| `evidence_page` | `int \| None` | the page that was actually checked |
+| `current_marker` | `str \| None` | reserved; currently `None` |
+
+`CORRECTION_ACTIONS` (closed vocabulary, 7 values): `add_citation`, `fix_page_number`,
+`replace_fabricated_citation`, `resolve_marker_syntax`, `reword_to_match_source`,
+`remove_unsupported_claim`, `none`.
+
+### 13.3 `CorrectionPlan`
+
+| Field | Type | Notes |
+|---|---|---|
+| `corrections` | `tuple[Correction, ...]` | severity-ordered, deterministic |
+| `summary_prompt` | `str` | one prompt covering every actionable finding |
+
+Iterable, sized and truthy by `corrections`. `is_empty` is `not corrections`.
+`actionable_count` excludes `none`.
+
+**Empty means two different things, deliberately:**
+
+| Input | `corrections` | `summary_prompt` | Meaning |
+|---|---|---|---|
+| `[]` (abstained) | empty | `""` | nothing was checked |
+| all `supported` | empty | positive text | checked, nothing wrong |
+
+### 13.4 `AnswerResponse.corrections`
+
+New field, defaulting to an empty plan so every existing construction site keeps working. Computed
+in `pipeline._response` by calling `advise(verifications, headline=summary.headline)` — derived
+from the verifications already produced, so advice and labels cannot disagree.
+
+`ResearchPipeline.review(response)` re-derives the plan from a response in hand. It does **not**
+re-verify: a second verification pass over the same data produces the same labels, and calling that
+"re-checking" would misrepresent what happened.
+
+### 13.5 Contract tests
+
+| ID | Invariant |
+|---|---|
+| CT-21 | No key in `repr`, in any note, in `degraded_reason`, or in `last_error` |
+| CT-22 | `PipelineConfig` has no field capable of carrying a key |
+| CT-23 | Every failure mode degrades to an extractive answer with a named reason |
+| CT-24 | Only `generator.py` contains an HTTP call site; every `urlopen` is guarded |
+| CT-25 | `DEFAULT_REMOTE_MODEL` ends with `:free` |
+| CT-26 | `GENERATORS[0] == "extractive"` and `GENERATORS[-1] == "openrouter"` |
+| CT-27 | Every `Reason` the verifier emits maps to an action in `REASON_ACTIONS` |
+| CT-28 | Every emitted action is in `CORRECTION_ACTIONS` |
+| CT-29 | `repair_prompt` contains the "never introduce a figure" instruction |
+| CT-30 | `advise([]).summary_prompt == ""` |

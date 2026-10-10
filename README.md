@@ -2,21 +2,43 @@
 
 **Status:** Phase 7 in progress — built, tested, calibrated, measured, and the Stage 3 report drafted.
 **Current gate:** `PHASE 7 ACTIVE — GATE G7 NOT YET PASSED`
-**Tests:** `pytest -q` → **512 passed, 6 deselected**, 0 failures, 0 skipped **on this machine** (2026-10-10). Without the Stage 2 report it is **492 passed, 20 skipped** — see [Fixtures](#fixtures). The 6 `semantic` tests pass separately
+**Tests:** `pytest -q` → **597 passed, 6 deselected**, 0 failures, 0 skipped **on this machine** (2026-10-11). Without the Stage 2 report it is **492 passed, 20 skipped** — see [Fixtures](#fixtures). The 6 `semantic` tests pass separately
 **Run it:** `streamlit run app.py`
-**Last updated:** 2026-10-08
+**Last updated:** 2026-10-11
 
 ---
 
 ## What this project is
 
 A fully local, zero-paid-API application that ingests academic PDFs, answers a question using only
-text retrieved from those PDFs, attaches page-level citation markers to every claim, and then
-**checks whether each claim is actually supported by the passage it cites**.
+text retrieved from those PDFs, attaches page-level citation markers to every claim, checks whether
+each claim is actually supported by the passage it cites, and then **tells you exactly what to change
+if it is not** — a specific correction per claim, plus a pasteable prompt to help rewrite it.
 
 The distinguishing feature is not answer fluency. It is **traceability**: a student must be able to
 open the cited file, go to the cited page, read the actual passage, and see the support score that
 produced the label.
+
+### Three answer generators, one default
+
+| Profile | Needs | What it does |
+|---|---|---|
+| **extractive** (default) | nothing | Quotes retrieved sentences verbatim. Cannot fabricate — it never writes new text. |
+| `flan-t5-small` | ~311 MB weights, local | Rewrites them on your machine. |
+| `openrouter` | `OPENROUTER_API_KEY` | Calls a hosted model. **Opt-in.** Sends only the retrieved passages. |
+
+The hosted profile is optional by design ([ADR-0016](docs/05_TECH_STACK_AND_ADRS.md#adr-0016--a-hosted-model-is-an-optional-profile-not-a-dependency)):
+the default stays offline, every citation it produces is still checked locally against the retrieved
+text, and a marker the model invents cannot survive. If no key is set — or the endpoint is down,
+rate-limited, or the model id is retired — it silently falls back to extractive mode and says so.
+
+**To enable it:** set the key in your environment (`OPENROUTER_API_KEY=...`) and pick "openrouter"
+in the sidebar. Never put the key in a config file or in code.
+
+> Free-tier models churn and rate-limit. The default (`google/gemma-4-26b-a4b-it:free`) was verified
+> against the live OpenRouter catalogue, but treat it as a starting point. Most free ids found in
+> tutorials — including every `meta-llama`, `qwen`, `deepseek`, `mistralai` and `openai` one — are
+> now dead.
 
 ## Team
 

@@ -840,6 +840,7 @@ class TestRenderHelpersRun:
         response = pipeline.ask("What does Chroma persist?")
         module._render_answer(response)
         module._render_verification(response)
+        module._render_corrections(response)
         module._render_inspector(response)
         module._render_retrieved(response)
         joined = " ".join(emitted)
@@ -847,6 +848,109 @@ class TestRenderHelpersRun:
         assert "Verification" in joined
         assert "Evidence inspector" in joined
         assert "Passages retrieved" in joined
+
+    def test_a_clean_answer_says_no_corrections_are_needed(
+        self, recorder, evidence_pdf: Path
+    ) -> None:
+        module, emitted, _ = recorder
+        from src.pipeline import ResearchPipeline
+
+        pipeline = ResearchPipeline()
+        pipeline.index([evidence_pdf])
+        module._render_corrections(pipeline.ask("What does Chroma persist?"))
+
+        joined = " ".join(emitted)
+        assert "Suggested corrections" in joined
+        assert "No corrections to suggest" in joined
+
+    def test_an_abstention_does_not_claim_the_citations_were_checked(
+        self, recorder, valid_pdf: Path
+    ) -> None:
+        """"Nothing to correct" and "checked, nothing wrong" are different facts."""
+        module, emitted, _ = recorder
+        from src.pipeline import ResearchPipeline
+
+        pipeline = ResearchPipeline()
+        pipeline.index([valid_pdf])
+        response = pipeline.ask("What is the boiling point of mercury?")
+
+        module._render_corrections(response)
+        joined = " ".join(emitted)
+
+        assert response.answer.abstained
+        assert "there were no claims to check" in joined
+        assert "No corrections to suggest" not in joined
+
+    def test_a_real_correction_is_rendered_with_its_action(
+        self, recorder, evidence_pdf: Path
+    ) -> None:
+        """The panel must show data from the pipeline, never a placeholder."""
+        module, emitted, _ = recorder
+        from dataclasses import replace
+
+        from src.models import Claim, ClaimVerification, CitationRef, GeneratedAnswer
+        from src.pipeline import ResearchPipeline
+
+        pipeline = ResearchPipeline()
+        pipeline.index([evidence_pdf])
+        retrieved = pipeline._retrieve("Chroma persists", 5)
+        rigged = GeneratedAnswer(
+            text="x",
+            generator="test",
+            claims=(
+                Claim(
+                    claim_id="clm_0",
+                    text="An external standards body audited the verifier.",
+                    markers=(CitationRef(None, None, "S9, p.4", False),),
+                    position=0,
+                ),
+            ),
+        )
+        verifications = pipeline._verifier.verify(rigged, retrieved)
+        response = replace(
+            pipeline.ask("What does Chroma persist?"), verifications=verifications
+        )
+        from src.advisor import advise
+
+        response = replace(response, corrections=advise(verifications))
+
+        module._render_corrections(response)
+        joined = " ".join(emitted)
+
+        assert "Replace the fabricated citation" in joined
+        assert "external standards body" in joined
+
+    def test_the_sidebar_offers_no_hosted_option_without_a_key(
+        self, recorder, evidence_pdf: Path, monkeypatch
+    ) -> None:
+        """Offering a profile that would silently degrade is worse than not offering it."""
+        module, emitted, _ = recorder
+        from src.pipeline import ResearchPipeline
+
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        pipeline = ResearchPipeline()
+        pipeline.index([evidence_pdf])
+        module.render_sidebar(pipeline)
+
+        joined = " ".join(emitted)
+        assert "openrouter" not in joined
+
+    def test_the_header_badge_states_the_actual_deployment(
+        self, recorder, monkeypatch
+    ) -> None:
+        """The badge said 'no API keys' unconditionally, which becomes false the moment a key exists."""
+        module, emitted, _ = recorder
+
+        monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+        module.render_header()
+        assert "local-only · no API keys" in " ".join(emitted)
+
+        emitted.clear()
+        monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-test")
+        module.render_header()
+        joined = " ".join(emitted)
+        assert "local-only · no API keys" not in joined
+        assert "hosted profile available" in joined
 
     def test_workspace_renders_the_abstention_state(self, recorder) -> None:
         module, emitted, _ = recorder

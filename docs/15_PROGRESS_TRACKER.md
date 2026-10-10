@@ -1039,3 +1039,100 @@ The equivalents that matter now live in the project:
 | 2026-10-08 | 6 | Documentation reconciliation after the gate: repaired duplicated/misnumbered headings in this file, filled the Phase 4-6 evidence rows in 01/12/13, measured results into 10 ?11 and 12 ?9, retired R-01/R-11/R-15, added **R-24** (abstention 0.000) and A-06/A-07, corrected `labeller_a`/`labeller_b` to be described as a self-reconciliation rather than independent annotators, and fixed 2 broken cross-links. No product code changed; suite re-run green at 371 passed |
 | 2026-10-08 | 7 | `logs/` created with 9 captured command outputs + README; **[16_STAGE_3_REPORT_DRAFT.md](16_STAGE_3_REPORT_DRAFT.md) drafted from the tracker**; [01 ?3.1](01_REQUIREMENTS.md#31-stage-3-versus-stage-2-deviations-log) D-11->D-19; **I-01 checked and did not reproduce** - R-04 closed; viva beat 4 rewritten after R-24; tracker ?9 rewritten for Phase 7. Gate G7 **not passed**: 7.2 screenshots and 7.4 contributions need a human |
 | 2026-10-08 | 7 | **Three live verifier defects found and fixed** (antonym branch searched `claim & chunk`, which by construction excludes the token an antonym contradiction turns on; the negation guard read a stopword-filtered set in which `not` can never appear; the antonym list paired inflections individually so cross-forms never met). Inflections now grouped by concept with seven named oppositions, and the check declines when the passage uses the claim's own direction. Accuracy unchanged at 0.667, threshold unchanged at 0.63, so no re-calibration was needed and none is claimed. 31 direct tests; **405 passed, 6 deselected**. **R-25 stays open**: the antonym branch is correct code and unit-tested, but no labelled case exercises it |
+
+---
+
+## 12. Change log — 2026-10-11
+
+| Phase | Change |
+|---|---|
+| 8 | **Citation corrections and an optional hosted answer profile.** `src/advisor.py` (new) maps each verifier reason code to a specific, actionable correction and a pasteable repair prompt, and is wired into every `AnswerResponse` as `corrections`. `OpenRouterGenerator` (new) adds a hosted answer profile over the OpenRouter chat-completions API, opt-in, with the extractive generator still the default. ADR-0016 and ADR-0017 record the decisions and their consequences. **597 passed, 6 deselected** — 66 tests added, none weakened or skipped. |
+
+### 12.1 What is measured, and what is not
+
+| | State |
+|---|---|
+| Offline suite | **597 passed, 6 deselected** (was 531 before this work) |
+| Hosted-profile verification quality | **not measured** — no key was used, so no number is quoted ([10 §13](10_EVALUATION_METRICS.md#13-hosted-profile-openrouter--not-measured)) |
+| Hosted latency, determinism, citation rate | **not measured** — same reason |
+| Offline calibration | **unchanged** at `verified_threshold = 0.63` |
+
+### 12.2 Decisions and their consequences
+
+- **The free-tier default was verified against the live catalogue, not remembered.**
+  `https://openrouter.ai/api/v1/models` returned 458 models, 15 priced `:free`. **None are from
+  meta-llama, qwen, deepseek, mistralai or openai** — every free id in common tutorials is dead.
+  `google/gemma-4-26b-a4b-it:free` is present and instruction-tuned.
+  `test_the_default_model_is_a_free_one` fails the build if a paid id is ever made the default,
+  because a paid default would silently bill whoever deployed it.
+- **SEC-08 had to be restated, not deleted.** `test_sec08_...` asserted `generator.py` imports no
+  HTTP client. That premise is now false by decision. It was rewritten to keep the original
+  invariant (`embeddings.py` still may not import one) and two stronger ones were added: exactly one
+  network call site in the whole of `src/`, and the default config never constructs the hosted
+  generator. A sweep that merely permitted the import would have been weaker than the one it
+  replaced.
+- **The advisor never edits.** `weak_support` deliberately produces *no* action — low overlap is
+  the documented weakness of a containment score on paraphrase (D-26), not evidence of an error,
+  and advice that is routinely wrong trains people to ignore it. `no_support` recommends *removing* a
+  claim rather than rewording it, because zero shared vocabulary is not a wording problem.
+- **Determinism stays scoped to the offline profile.** `temperature=0` and `seed=0` are sent to the
+  hosted model, which makes most answers stable but is not a guarantee. NFR-03 is unchanged.
+
+### 12.3 Known limits, recorded rather than smoothed over
+
+- **The hosted threshold is an untested assumption.** `0.63` was calibrated on extractive claims
+  whose containment overlap is near 1.0 by construction. A hosted paraphrase scores lower on the
+  same measure. [10 §13.2](10_EVALUATION_METRICS.md#132-what-must-not-be-said) says what must
+  not be claimed until this is re-swept.
+- **The advisor cannot tell whether the *source* is right.** It compares a claim with the passage
+  that claim cites. If the document itself is wrong, a perfectly supported citation is still wrong.
+- **Free endpoints are rate-limited and retire without notice.** Availability is not under the
+  project's control, which is the second reason the profile is optional.
+
+### 12.4 Next action
+
+Measure the hosted profile against `tools/evaluate.py --sweep` once a key is available, and
+**re-sweep `verified_threshold` on the hosted claim distribution rather than assuming 0.63 carries
+over**. That is now the largest open measurement in the project.
+
+### 12.5 Live API run (2026-10-11) — what actually happened
+
+The key was supplied and used. Findings, in the order they mattered.
+
+**1. The chosen default model does not work.** `google/gemma-4-26b-a4b-it:free` returned HTTP 429
+five times in a row over ~48s of backoff, twice, and never produced an answer.
+`google/gemma-4-31b-it:free` returned 429 immediately. `thinkingmachines/*` returned **HTTP 403**
+(not permitted for this account). `nvidia/*`, `dots-studio/*` and `apodex/*` returned HTTP 200
+with a **null** content field — a fourth distinct failure mode.
+
+Only `poolside/laguna-s-2.1:free` answered reliably. **This is the finding: "listed in the
+catalogue", "permitted for this account", "returns text" and "not rate-limited" are four different
+properties, and only the last is discovered by calling.** The default is now
+`poolside/laguna-s-2.1:free`, and the generator walks a chain of four free ids, moving on when one
+is busy, forbidden, or returns nothing.
+
+**2. The original retry policy was far too weak.** One attempt with a 1.5s pause against a limit
+that takes ~16s to clear meant the profile degraded to extractive on almost every call. Now five
+attempts with exponential backoff capped at 30s, **and only against the same model** — a 401 is
+tried once per model rather than five times.
+
+**3. The verifier disagrees with correct hosted answers.** Two correct, correctly cited answers both
+came back `Needs Review` at support 0.579 and 0.585 against a 0.63 threshold, with
+**overlap = 1.000 on both**. The model quoted the document verbatim; the score was held down by the
+similarity term (0.40), because cosine between a short claim and a 180-word chunk is structurally
+low. Full analysis and the fix that is *not* to lower the threshold:
+[10 —13.4](10_EVALUATION_METRICS.md#134-first-live-measurement-2026-10-11--the-threshold-does-not-transfer).
+
+**4. A test design flaw, found by a duration report.** The 429 test used the production backoff for
+real: **860 seconds**, in a suite that should take seconds. `sleep` is now injectable and no test
+spends wall-clock. Same coverage, suite went 868s — 7.8s.
+
+**5. Abstention still costs nothing.** "What is the boiling point of mercury?" abstained in **6 ms**
+with no API call, exactly as offline.
+
+### 12.6 Next action
+
+**Re-sweep `verified_threshold` on hosted claims** by running `tests/data/eval_cases.jsonl` through
+the hosted profile {EM} and treat the similarity-component finding in
+[10 §13.4](10_EVALUATION_METRICS.md#134-first-live-measurement-2026-10-11--the-threshold-does-not-transfer)
+as the hypothesis to test, not the conclusion. Two claims are an anecdote.

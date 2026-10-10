@@ -1252,6 +1252,112 @@ class TestQueryCoverageSignal:
         assert query_coverage("boiling point mercury", results, "retrieved").value > 0.0
         assert query_coverage("boiling point mercury", results, "top").value == 0.0
 
+    def test_morphological_variants_of_a_present_term_are_covered(self) -> None:
+        """`readings` is covered by a passage that says `reading`.
+
+        The defect this pins: coverage compared raw tokens, so a question phrased in the plural was
+        refused against a document using the singular. Six of ten answerable paraphrase questions
+        were refused for exactly this class of reason.
+        """
+        results = [self._result("The sampler discards the first reading of each window.")]
+        report = query_coverage("How often are the readings drawn?", results)
+
+        assert "readings" in report.covered
+        assert "readings" not in report.missing
+
+    def test_derived_and_inflected_forms_all_reach_one_stem(self) -> None:
+        """The reductions are genuinely morphological, not one lucky pair.
+
+        Each pair is a form the pipeline must treat as the same word. Asserted as data so the
+        suffix table cannot be edited down to fix one case and quietly break the rest.
+        """
+        from src.chunking import light_stem
+
+        for variant, base in [
+            ("readings", "reading"),
+            ("figures", "figure"),
+            ("citations", "citation"),
+            ("conditions", "condition"),
+            ("contributions", "contribution"),
+            ("created", "create"),
+            ("calibrated", "calibrate"),
+            ("averaging", "average"),
+            ("running", "run"),
+            ("stopped", "stop"),
+        ]:
+            assert light_stem(variant) == light_stem(base), (
+                f"{variant} and {base} do not converge on one stem"
+            )
+
+    def test_short_and_function_words_are_left_alone(self) -> None:
+        """Over-stripping would make distinct words collide, so short words must survive intact.
+
+        `light_stem` refuses to touch anything of four characters or fewer. Without that guard `is`
+        becomes `i` and `was` becomes `wa`, and coverage would report a match that is not one.
+        """
+        from src.chunking import light_stem
+
+        for word in ("the", "and", "was", "that", "this", "were", "been", "some", "also", "much"):
+            assert light_stem(word) == word
+
+    def test_stemming_is_idempotent(self) -> None:
+        """A stem must not keep shrinking when applied twice.
+
+        The pipeline stems the question and the passage separately and never re-stems, so this is
+        not load-bearing today. It is asserted because a non-idempotent stem makes the two sides
+        agree only by accident, and the next caller that passes an already-stemmed string would get
+        a silent, position-dependent answer.
+        """
+        from src.chunking import light_stem
+
+        for word in ("figures", "readings", "calibrated", "noise", "retrieved"):
+            once = light_stem(word)
+            assert light_stem(once) == once, f"{word} does not reach a fixed point"
+
+    def test_a_stem_does_not_match_inside_a_longer_word(self) -> None:
+        """The false positive that forced token equality instead of substring matching.
+
+        `lights` stems to `light`, and the Stage 2 report contains "lightweight". Under the previous
+        substring comparison, "What causes the northern lights?" was answered from a document about
+        neither. A stem must match a whole token, never a fragment of one.
+        """
+        results = [self._result("The lightweight protocol needs no downloaded weights.")]
+
+        assert "lights" in query_coverage("What causes the northern lights?", results).missing
+        assert "weightless" in query_coverage("What is the weightless protocol?", results).missing
+
+    def test_the_report_names_the_users_words_not_the_stems(self) -> None:
+        """`insufficient_evidence_answer` quotes these back to the user, so they must be verbatim.
+
+        Scoring happens on stems, but a refusal that says `boil` to someone who asked about
+        "boiling" is both unhelpful and untrue. A test caught this regression the moment it was
+        introduced, which is the only reason it is worth stating.
+        """
+        results = [self._result("Chroma persists embeddings on the local filesystem.")]
+        report = query_coverage("What is the boiling point of mercury?", results)
+
+        assert report.missing == ("boiling", "mercury", "point")
+        assert not any(term in {"boil", "point"} for term in report.covered)
+        # Every reported term must occur verbatim in the question that was asked.
+        assert all(term in "What is the boiling point of mercury?" for term in report.missing)
+
+    def test_question_scaffolding_is_excluded_from_the_denominator(self) -> None:
+        """Phrasing words must not dilute the ratio the gate depends on.
+
+        "How much time passes between successive readings?" carries `much` and `passes`, which say
+        nothing about the subject. Counting them as content terms lowers coverage for a question
+        whose distinctive words are all present.
+        """
+        results = [self._result("Time passes between successive readings of the window.")]
+
+        # "much" is scaffolding and is dropped; "time", "readings" are not, and both are present.
+        report = query_coverage("How much time passes between successive readings?", results)
+
+        assert "much" not in report.covered
+        assert "much" not in report.missing
+        assert report.terms == len(report.covered) + len(report.missing)
+        assert report.value == 1.0
+
     def test_an_unknown_scope_is_refused_rather_than_guessed(self) -> None:
         with pytest.raises(ValueError, match="unknown coverage scope"):
             query_coverage("anything", [self._result("text")], "everything")

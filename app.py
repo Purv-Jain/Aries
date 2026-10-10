@@ -38,9 +38,9 @@ from src.models import (
     PipelineConfig,
     ResourceLimits,
 )
-from src.pipeline import ResearchPipeline
+from src.pipeline import ResearchPipeline, hosted_profile_available
 
-APP_VERSION = "0.5.0"
+APP_VERSION = "0.6.0"
 BRAND = "Verdant Scholar"
 TAGLINE = "Answers from your papers — with citations you can check."
 
@@ -87,6 +87,17 @@ REASON_TEXT: Mapping[str, str] = MappingProxyType({
     "no_marker": "The claim carried no citation.",
     "numeric_mismatch": "A number in the claim is absent from the cited passage.",
     "contradiction_detected": "The claim and the passage differ in polarity.",
+})
+
+
+ACTION_LABEL: Mapping[str, str] = MappingProxyType({
+    "add_citation": "Add a citation",
+    "fix_page_number": "Correct the page number",
+    "replace_fabricated_citation": "Replace the fabricated citation",
+    "resolve_marker_syntax": "Fix the citation format",
+    "reword_to_match_source": "Reword to match the source",
+    "remove_unsupported_claim": "Remove or re-cite the claim",
+    "none": "No action needed",
 })
 
 
@@ -360,6 +371,40 @@ def render_sidebar(pipeline: ResearchPipeline) -> str:
             "Max pages per document", 5, 500, pipeline.config.limits.max_pages_per_document, step=5
         )
 
+        # Generator profile. The hosted option is offered only when a key is actually present, so
+        # the default install shows no network option at all and cannot mislead anyone into
+        # selecting one that would silently degrade.
+        generator_choices = ["extractive", "flan-t5-small"]
+        if hosted_profile_available():
+            generator_choices.append("openrouter")
+        generator_index = generator_choices.index(pipeline.config.generator) if (
+            pipeline.config.generator in generator_choices
+        ) else 0
+        generator_name = st.selectbox(
+            "Answer generator",
+            generator_choices,
+            index=generator_index,
+            help=(
+                "Extractive quotes the retrieved sentences verbatim, so it cannot fabricate. "
+                "FLAN-T5-small rewrites them locally. The hosted option calls a remote model and "
+                "sends the retrieved passages to it -- it is only offered when an API key is "
+                "configured."
+            ),
+        )
+        if generator_name == "openrouter":
+            st.markdown(
+                '<div class="vs-note" style="font-size:11.5px;">Hosted profile: the retrieved '
+                "passages and your question are sent to OpenRouter. Every citation is still "
+                "checked locally against the retrieved text.</div>",
+                unsafe_allow_html=True,
+            )
+        if pipeline.config.generator == "openrouter" and not hosted_profile_available():
+            st.markdown(
+                '<div class="vs-error" style="font-size:11.5px;">The hosted profile is selected '
+                "but no API key is set, so answers will fall back to extractive mode.</div>",
+                unsafe_allow_html=True,
+            )
+
         if overlap_words >= chunk_words:
             st.markdown(
                 f'<div class="vs-error">Overlap must be smaller than the chunk size. '
@@ -386,6 +431,7 @@ def render_sidebar(pipeline: ResearchPipeline) -> str:
                 limits=ResourceLimits(
                     max_upload_mb=max_upload, max_pages_per_document=max_pages
                 ),
+                generator=generator_name,
             )
             if candidate != pipeline.config:
                 pipeline.reconfigure(candidate)
@@ -405,12 +451,19 @@ def render_sidebar(pipeline: ResearchPipeline) -> str:
 
 
 def render_header() -> None:
+    # The badge states the deployment's actual property rather than a fixed claim. "local-only ·
+    # no API keys" is true of a default install and false the moment someone selects the hosted
+    # profile, and a badge that lies in one of those two states is worse than no badge.
+    if hosted_profile_available():
+        privacy = "local by default · hosted profile available"
+    else:
+        privacy = "local-only · no API keys"
     st.markdown(
         f'<div class="vs-header"><span class="vs-mark">▮</span>'
         f'<span class="vs-brand">{escape(BRAND)}</span>'
         f'<div class="vs-tagline">{escape(TAGLINE)}</div>'
         f'<div class="vs-badge" style="margin-top:12px;">'
-        f"local-only · no API keys · v{escape(APP_VERSION)}</div></div>",
+        f"{escape(privacy)} · v{escape(APP_VERSION)}</div></div>",
         unsafe_allow_html=True,
     )
 
@@ -745,8 +798,71 @@ def render_workspace(pipeline: ResearchPipeline) -> None:
 
     _render_answer(response)
     _render_verification(response)
+    _render_corrections(response)
     _render_inspector(response)
     _render_retrieved(response)
+
+
+def _render_corrections(response: AnswerResponse) -> None:
+    """What to change, and a prompt to help change it.
+
+    Renders three states distinctly, because they mean different things: there are corrections, the
+    check ran and found none, or nothing was checked at all because the system abstained. Collapsing
+    the last two into "all good" would be the one overclaim this project cannot make.
+    """
+    st.markdown(
+        '<div class="vs-card-head">Suggested corrections</div>', unsafe_allow_html=True
+    )
+    plan = response.corrections
+
+    if response.answer.abstained:
+        st.markdown(
+            '<div class="vs-info">The citation check did not run — no answer was produced, so '
+            "there were no claims to check. Upload a document that covers this question and ask "
+            "again.</div>",
+            unsafe_allow_html=True,
+        )
+        return
+
+    if plan.is_empty:
+        st.markdown(
+            '<div class="vs-info">Every claim resolved to a retrieved passage and cleared the '
+            "support check. No corrections to suggest.</div>",
+            unsafe_allow_html=True,
+        )
+        return
+
+    st.markdown(
+        f'<div class="vs-note" style="margin-top:0;">{plan.actionable_count} '
+        f"claim(s) can be improved. These are suggestions from the citation check, not "
+        "corrections the system has made to your document.</div>",
+        unsafe_allow_html=True,
+    )
+
+    for correction in plan:
+        label = ACTION_LABEL.get(correction.action, correction.action)
+        st.markdown(
+            f'<div class="vs-claim-card"><div class="vs-eyebrow">{escape(label)}</div>'
+            f'<div class="vs-claim-text" style="margin-top:10px;">'
+            f"{escape(correction.claim_text)}</div>"
+            f'<div class="vs-note">{escape(correction.suggestion)}</div></div>',
+            unsafe_allow_html=True,
+        )
+        # `st.code` rather than raw HTML: this is text destined for a clipboard, and the user is
+        # going to paste it into another tool, so it must be selectable and unmodified.
+        with st.expander("Prompt to help rewrite this claim"):
+            st.code(correction.repair_prompt, language=None)
+            st.caption(
+                "Built from the retrieved passage and this claim only. Review the rewrite before "
+                "using it — and keep every number exactly as the source states it."
+            )
+
+    with st.expander("One prompt covering every correction"):
+        st.code(plan.summary_prompt, language=None)
+        st.caption(
+            "Asks another assistant to propose rewrites. It is given only the flagged claims and "
+            "their cited passages, never your whole document."
+        )
 
 
 def _render_answer(response: AnswerResponse) -> None:

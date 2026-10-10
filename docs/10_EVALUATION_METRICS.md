@@ -467,3 +467,106 @@ Report them as "measured on 24 self-authored cases", never as validation.
 6. **Ablations, if time allows.** Report Recall@k for the offline vs semantic profile. It directly
    quantifies what the semantic profile buys — a genuinely useful comparison for the report, and one
    of the most convincing things we can show.
+
+---
+
+## 13. Hosted profile (OpenRouter) — not measured
+
+Added 2026-10-11, with ADR-0016. **Nothing in this section has a number, and that is the honest
+state.** No API key was used to produce any figure, so no figure is quoted.
+
+| Metric | State | Why |
+|---|---|---|
+| Verification quality, hosted answers | **not measured** | The 34-case labelled set has never been run through the hosted profile. Its claims are paraphrases, not near-substrings, so the extractive threshold is **not** known to transfer. |
+| Support-score distribution, hosted | **not measured** | Follows from the above. |
+| Latency, hosted | **not measured** | A network round trip plus inference; needs a key. |
+| Citation rate (claims carrying a marker) | **not measured** | Needs a key. |
+| Determinism, hosted | **not measured** | `temperature=0` and `seed=0` are sent; that is a mitigation, not a guarantee. |
+| Abstention rate, hosted | **not measured** | `NOT IN PASSAGES` is honoured, but the rate is unobserved. |
+
+### 13.1 What is claimed about the hosted profile
+
+Only what is enforced by a test, with no key and no network:
+
+- The default profile is `extractive`; a fresh clone needs no key and no network (CT-24, CT-26).
+- No key can appear in `repr`, a note, a failure message, `degraded_reason` or `last_error`
+  (CT-21), and no config field can carry one (CT-22).
+- Only retrieved passages are transmitted, and no filename or path (HC-4, tested).
+- Markers written by the model are stripped and re-attributed locally, so a model cannot cite a
+  passage it was not given (HC-5, tested).
+- Every failure degrades to the extractive answer with a named reason (HC-6, tested).
+- The default model id is a `:free` id, verified against the live catalogue (CT-25).
+
+### 13.2 What must not be said
+
+**Do not report any hosted-profile accuracy, precision, recall, F1, latency or determinism figure
+until one has been measured against the real API.** In particular, the offline profile—s
+`verified_threshold = 0.63` was calibrated on extractive claims, whose containment overlap is near
+1.0 *by construction* because an extractive claim is a near-substring of its passage. A hosted claim
+is a paraphrase and will score lower on containment. Applying 0.63 unchanged to hosted output is an
+untested assumption, and the report must call it one.
+
+### 13.3 How to measure it, when a key exists
+
+1. `set OPENROUTER_API_KEY=...` and configure `generator="openrouter"`.
+2. Run `tools/evaluate.py --sweep` against `tests/data/eval_cases.jsonl` with the hosted profile.
+3. **Re-sweep `verified_threshold` on the hosted claim distribution.** Do not reuse 0.63 by
+   assumption. The sweep reports the false-`Verified` rate at each point, and the correctness-first
+   criterion of ADR-0007 applies unchanged.
+4. Record both profiles side by side in [15 §7](15_PROGRESS_TRACKER.md#7-test-results).
+
+This is the single largest open measurement in the project, and it is the one most likely to change
+a number the report states.
+
+### 13.4 First live measurement (2026-10-11) — the threshold does **not** transfer
+
+A real key was used for a first end-to-end run. This is the first hosted figure in the project and
+it is reported because it contradicts an assumption, not because it flatters the system.
+
+**What worked.** `poolside/laguna-s-2.1:free` answered three questions end to end with no
+degradation, returning correct citations:
+
+| Question | Answer returned | Label |
+|---|---|---|
+| What is the drift tolerance that triggers recalibration? | "a drift above two percent" `[S1, p.1]` | Needs Review |
+| Which two noise sources are reported separately? | "thermal noise and shot noise" `[S1, p.3]` | Needs Review |
+| What is the boiling point of mercury? | *(abstained, 6 ms, no API call)* | — |
+
+**The finding.** Both answers are correct and correctly cited, and **neither reached `Verified`.**
+
+| Claim | support | similarity | overlap | label |
+|---|---|---|---|---|
+| "The drift tolerance ... is a drift above two percent." | **0.579** | 0.399 | **1.000** | Needs Review |
+| "The two noise sources ... are thermal noise and shot noise." | **0.585** | 0.406 | **1.000** | Needs Review |
+
+Note `overlap = 1.000` on both: the model **quoted the document verbatim**, so every content token
+of the claim is present in the passage. The score was held down entirely by the **similarity** term
+(0.40), because TF-IDF cosine between a short claim and a 180-word chunk is structurally low. The
+weighted mean is `0.7*0.40 + 0.3*1.00 = 0.58`, which sits below the shipped `verified_threshold`
+of 0.63.
+
+**So the shipped threshold is wrong for hosted answers, and the direction of the error is the
+important part.** The prediction in ADR-0016 — that a hosted paraphrase "will score lower on
+containment" — was **half right**. Containment was perfect; it is the *similarity* component
+that collapses, for a different reason: a short well-grounded claim is lexically dilute against a
+long chunk, and cosine punishes exactly that length asymmetry. `token_overlap` was already
+**containment, not Jaccard** (D-06) for precisely this reason; the similarity term still has not
+been given the same treatment.
+
+**What must not be done about it.** Lowering `verified_threshold` to 0.58 to make these two claims
+pass would be fitting the threshold to two examples, and would give back the false-`Verified` rate
+of 0.000 that the whole calibration exists to protect. ADR-0007's correctness-first criterion is
+unchanged by this finding.
+
+**What should be done instead**, in order:
+
+1. **Run the full 34-case labelled set through the hosted profile** and re-sweep, as
+   [13.3](#133-how-to-measure-it-when-a-key-exists) describes. Two claims are an anecdote.
+2. **Consider a length-normalised similarity for the semantic component** — containment already
+   solves this for the lexical one, and the same reasoning applies here. This is an architectural
+   change and needs its own ADR.
+
+Until step 1 is done, the honest statement is: *the hosted profile produces correct, correctly
+cited answers that this project's own verifier currently labels `Needs Review`.* That is a real and
+reportable result about the verifier, and it is more interesting than a number tuned until the
+label agreed.

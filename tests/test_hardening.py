@@ -712,13 +712,57 @@ class TestSecuritySweep:
             )
 
     def test_sec08_the_semantic_backends_are_the_only_ones_importing_http(self) -> None:
+        """`embeddings.py` must not import an HTTP client directly.
+
+        It never did and must not: it reaches the network only through `transformers`, which is why
+        the offline guarantee is enforced by the environment rather than by our own code.
+
+        `generator.py` **does** now import `urllib`, deliberately, for `OpenRouterGenerator`
+        (ADR-0016). That is the one place in the project that leaves the machine, so the invariant
+        has to be restated rather than deleted: importing an HTTP client is fine, but the *default*
+        path must never call it, and `OpenRouterGenerator` must not be constructed unless the
+        profile was chosen. Both halves are asserted below and in the next test -- a sweep that
+        merely permitted the import without pinning the reachability would be a weaker test than
+        the one it replaces.
+        """
         embeddings = _source(PROJECT_ROOT / "src" / "embeddings.py")
+        assert "import requests" not in embeddings
+        assert "import urllib" not in embeddings
+
+    def test_sec08b_the_only_http_call_site_is_the_optional_hosted_generator(self) -> None:
+        """Pin the network surface: exactly one module may call out, and only on request."""
+        import re as _re
+
+        offenders: list[str] = []
+        pattern = _re.compile(r"urlopen|urllib\.request\.Request|requests\.(get|post)")
+        for path in (PROJECT_ROOT / "src").glob("*.py"):
+            if path.name == "generator.py":
+                continue
+            if pattern.search(path.read_text("utf-8")):
+                offenders.append(path.name)
+        assert offenders == [], f"unexpected network call site(s): {offenders}"
+
+        # And inside generator.py, every call is on an OpenRouterGenerator attribute rather than
+        # at module scope, so importing the module can never reach the network.
         generator = _source(PROJECT_ROOT / "src" / "generator.py")
-        # Neither imports an HTTP client directly; they go through transformers, which is why the
-        # offline guarantee is enforced by the environment rather than by our own code.
-        for text in [embeddings, generator]:
-            assert "import requests" not in text
-            assert "import urllib" not in text
+        for line in generator.splitlines():
+            if "urlopen" in line:
+                assert "self._transport" in line or "urllib.request.urlopen" in line, (
+                    f"a urlopen call escaped its guard: {line.strip()}"
+                )
+
+    def test_the_hosted_generator_is_never_constructed_by_the_default_config(self) -> None:
+        """The load-bearing half: importing and constructing must not reach the network."""
+        from src.models import PipelineConfig
+        from src.pipeline import ResearchPipeline
+
+        assert PipelineConfig().generator == "extractive"
+        pipeline = ResearchPipeline(PipelineConfig())
+        assert pipeline._generator.name == "extractive"
+        # The hosted class is importable and constructible with no key and no network.
+        from src.generator import OpenRouterGenerator
+
+        assert OpenRouterGenerator().model_name.endswith(":free")
 
     def test_the_offline_profile_needs_no_socket(self) -> None:
         """A real socket-guard test: forbid connections, then run a full offline query."""

@@ -24,6 +24,7 @@ __all__ = [
     "EXTRACTORS",
     "LABELS",
     "VERIFICATION_LABELS",
+    "GENERATORS",
     "ResourceLimits",
     "DocumentPage",
     "DocumentSummary",
@@ -39,6 +40,10 @@ __all__ = [
     "GeneratedAnswer",
     "ClaimVerification",
     "VerificationSummary",
+    "CoverageReport",
+    "AbstentionConfig",
+    "Correction",
+    "CorrectionPlan",
     "QueryMetrics",
     "AnswerResponse",
     "PipelineConfig",
@@ -108,7 +113,44 @@ LABELS: frozenset[str] = frozenset({"indexed", "failed"})
 VERIFICATION_LABELS: tuple[str, str, str] = ("Verified", "Needs Review", "Unsupported")
 
 # Answer generators the pipeline knows how to build.
-GENERATORS: tuple[str, ...] = ("extractive", "flan-t5-small")
+#
+# `openrouter` is the optional hosted profile. It is listed last deliberately: the default and the
+# test profile are both local, so a fresh clone reproduces its numbers with no key and no network.
+# A remote model is an *option*, never a dependency -- see ADR-0016.
+GENERATORS: tuple[str, ...] = ("extractive", "flan-t5-small", "openrouter")
+
+# The hosted generator's default model.
+#
+# **Chosen from the live OpenRouter catalogue rather than from memory, because the catalogue turns
+# over.** Checked against `https://openrouter.ai/api/v1/models`: 458 models, of which **15** carry
+# the `:free` suffix and price at exactly `{"prompt": "0", "completion": "0"}`.
+#
+# The commonly-published free IDs no longer exist. At the time of writing there are **zero** free
+# models from meta-llama, qwen, deepseek, mistralai or openai, so any documentation naming one of
+# them as a default would ship a broken default.
+#
+# **Why a list and not one id -- a measured decision.** A live call with a real key, 2026-10-11:
+# `google/gemma-4-26b-a4b-it:free` returned HTTP 429 five times in a row (~48 s of backoff) and
+# never produced an answer, twice; `google/gemma-4-31b-it:free` returned 429 immediately;
+# `thinkingmachines/*` returned **HTTP 403** (not available to this account);
+# `nvidia/nemotron-3.5-lightning:free`, `dots-studio/*` and `apodex/*` returned HTTP 200 with a
+# **null** content field, which is a different failure again; `poolside/laguna-s-2.1:free`
+# answered correctly and quickly. So "present in the catalogue", "permitted for this account",
+# "actually returns text" and "not rate-limited" are four different properties, and only the last
+# one is discovered by calling.
+#
+# The generator therefore tries these in order and moves on when one fails. That is not a
+# convenience: with a single hardcoded id the feature degrades to extractive whenever that one
+# endpoint is busy, which is most of the time on a free tier.
+DEFAULT_REMOTE_MODEL = "poolside/laguna-s-2.1:free"
+
+# Ordered by observed reliability, not by quality. All are free-tier and all may disappear.
+REMOTE_FALLBACK_MODELS: tuple[str, ...] = (
+    "google/gemma-4-26b-a4b-it:free",
+    "nvidia/nemotron-3.5-lightning:free",
+    "google/gemma-4-31b-it:free",
+    "dots-studio/dots-3-note-preview:free",
+)
 
 
 @dataclass(frozen=True)
@@ -615,6 +657,91 @@ class VerificationSummary:
 
 
 @dataclass(frozen=True)
+class Correction:
+    """One thing wrong with a claim's citation, and what to do about it.
+
+    This is the project's answer to "the citation looks wrong -- what now?". A verification label
+    says *what the system found*; a correction says *what the author should change*, in a form they
+    can act on without reading this source code.
+
+    Three fields, each doing a distinct job:
+
+    * ``action`` is a stable code, so the UI can pick an icon and a test can assert a category
+      without matching on prose.
+    * ``suggestion`` is the human instruction. It names the specific page and the specific term
+      rather than saying "improve your citation", because advice that cannot be acted on is the
+      same as no advice.
+    * ``repair_prompt`` is a ready-to-paste prompt for a general-purpose assistant, so the user can
+      get a drafted rewrite instead of editing prose alone. It is **derived only from material this
+      system already retrieved** -- never from the source document as a whole -- so the prompt
+      cannot smuggle in context the user has not seen.
+    """
+
+    claim_id: str
+    claim_text: str
+    action: str
+    suggestion: str
+    repair_prompt: str
+    evidence_page: int | None = None
+    current_marker: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+# The actions a `Correction` may recommend. A closed vocabulary, like the verification labels, so
+# the UI cannot render an action nobody designed for.
+CORRECTION_ACTIONS: tuple[str, ...] = (
+    "add_citation",
+    "fix_page_number",
+    "replace_fabricated_citation",
+    "reword_to_match_source",
+    "remove_unsupported_claim",
+    "resolve_marker_syntax",
+    "none",
+)
+
+
+@dataclass(frozen=True)
+class CorrectionPlan:
+    """Every correction for one answer, plus a pasteable prompt covering all of them.
+
+    Kept separate from `Correction` so the UI can show "3 issues found" without walking the list,
+    and so an answer with nothing wrong has one obvious empty representation.
+    """
+
+    corrections: tuple[Correction, ...]
+    summary_prompt: str
+
+    def __iter__(self):
+        """Iterating a plan yields its corrections.
+
+        Present so every consumer can write ``for correction in plan`` rather than reaching through
+        to ``plan.corrections``. Frozen dataclass fields are plain tuples and are not iterable
+        themselves, and a wrapper type that cannot be walked is a trap at the call site.
+        """
+        return iter(self.corrections)
+
+    def __len__(self) -> int:
+        return len(self.corrections)
+
+    def __bool__(self) -> bool:
+        return bool(self.corrections)
+
+    @property
+    def is_empty(self) -> bool:
+        return not self.corrections
+
+    @property
+    def actionable_count(self) -> int:
+        """Corrections that are not the placeholder ``none`` entry."""
+        return sum(1 for correction in self.corrections if correction.action != "none")
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(frozen=True)
 class QueryMetrics:
     """Measured timings for one query. Never estimated, never shown as a promise."""
 
@@ -633,7 +760,13 @@ class QueryMetrics:
 
 @dataclass(frozen=True)
 class AnswerResponse:
-    """The single object the UI renders. Nothing else."""
+    """The single object the UI renders. Nothing else.
+
+    ``corrections`` is what turns a label into an action: the verifier says a claim's page number
+    is wrong, and the advisor says which page, and the repair prompt says how to rewrite the
+    sentence. It is computed from ``verifications`` by a pure function, so it cannot disagree with
+    the labels it was derived from.
+    """
 
     question: str
     answer: GeneratedAnswer
@@ -642,6 +775,7 @@ class AnswerResponse:
     summary: VerificationSummary
     metrics: QueryMetrics
     warnings: tuple[str, ...] = ()
+    corrections: CorrectionPlan = CorrectionPlan(corrections=(), summary_prompt="")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
