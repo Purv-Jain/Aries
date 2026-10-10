@@ -196,7 +196,11 @@ support score and retrieval relevance as **separately labelled rows**.
 
 > **Not yet claimed:** greyscale readability, a keyboard-only walkthrough, and 1280/768 px layout
 > have not been checked by a person. The 98 UI tests prove the render path executes and the markup is
-> correct; they cannot see a layout. No screenshots are included in this draft.
+> correct; they cannot see a layout.
+>
+> **Five screenshots of the running application are now included** — see §10b. They are real captures of
+> real states, regenerable by one command, and a test fails if any of them goes missing, truncates or
+> blanks out. Four of the nine planned states are still manual and are still listed as missing in §15.
 
 ## 10. Testing
 
@@ -212,6 +216,37 @@ support score and retrieval relevance as **separately labelled rows**.
 | `test_hardening.py` | 64 | evaluation integrity, calibration, **abstention-gate and antonym-branch measurement**, security sweep, determinism, metrics, CLI, cross-platform paths, CI config |
 
 All 17 mandated edge cases and all 20 contract tests are covered.
+
+### 10c. Screenshots of the running application
+
+Five states, captured by launching the actual app and driving it:
+`tools/capture_screenshots.py` starts a real Streamlit process, uploads a real PDF, asks real
+questions and photographs the result at a 1440x900 viewport, 2x scale. Nothing is staged, no HTML is
+injected, and no panel is reproduced for effect.
+
+| # | State shown |
+|---|---|
+| S1 | the dashboard before upload — the genuine empty state |
+| S2 | the indexed document library |
+| S3 | a grounded answer carrying `[Sx, p.y]` markers |
+| S4 | per-claim verification with the cited passage open |
+| S5 | an out-of-corpus question, refused |
+
+The document used is the committed synthetic fixture, not this team's Stage 2 report: committing
+screenshots of that report to a public repository would publish it, which §10b and [B-07 §7.8](15_PROGRESS_TRACKER.md#78-b-07--fixtures-in-the-repository-and-a-generality-question-worth-asking)
+both declined.
+
+**S5 is the abstention gate as a user meets it** — the refusal, the coverage figure against the 0.50
+floor, the query terms that did not match, and a verification panel reading 0/0/0.
+
+Twelve tests keep the set from rotting: each file must exist, be a complete PNG, and not be a blank
+rectangle — which is what a failed render produces, and which looks like a perfectly valid file.
+They cannot judge whether an image is *honest*; only a person can, and the claim is made no wider
+than that.
+
+**Four states are still missing**: greyscale legibility, keyboard-only traversal, a 1280x768
+viewport, and the degraded-mode banner. Those need a person looking at a screen, and they are listed
+as missing in §15 rather than quietly dropped.
 
 ### 10b. Does it work on a report nobody here has read?
 
@@ -563,7 +598,7 @@ Licence and version verification for each third-party component is recorded in
 Stated plainly so the gap is not mistaken for oversight:
 
 | Missing | Why | Blocked on |
-|---|---|---|
+| Screenshots S6–S9 | **S1–S5 captured** 2026-10-10 — real, regenerable by one command. The remaining four are greyscale, keyboard-only, 1280 px and degraded-mode checks | a person looking at the screen |
 | Screenshots S1?S9 | Not captured. None would be fabricated | a human at the screen (7.2) |
 | Per-member contribution split | Two commits exist; the Phases 0-6 one carries a placeholder author, so it cannot decompose into three contributions (?13) | **B-05** ? disclosure chosen over rewriting history |
 | ~~Green CI run~~ | **ACHIEVED** — run 37880879892 on `66075b`, all three jobs green. Required fixing a Windows-path bug that had the evaluation tests raising `FileNotFoundError` on Linux | — |

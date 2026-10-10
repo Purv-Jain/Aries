@@ -618,19 +618,49 @@ class TestSecuritySweep:
         assert not re.search(r"(?<!re\.)\b(eval|exec|compile|__import__)\s*\(", "re.compile(r'x')")
 
     def test_sec04_no_subprocess_or_shell_out(self) -> None:
-        # `tools/measure.py` shells out to `wmic` to record CPU and RAM, which is measurement
-        # tooling and not a path that document content can reach. It is the single exception and it
-        # is named here so that adding a second one would be visible.
-        allowed = {"tools/measure.py"}
+        """No shelling out, with named exceptions that each carry a reason.
+
+        The rule exists because a subprocess is the easiest way to turn document content into code
+        execution. `src/` and `app.py` are on the path document content can reach, so they have no
+        exceptions at all. Development tooling is different in kind: it never sees a PDF.
+
+        Each entry below states **why** it is exempt, so a third exception is a visible decision
+        rather than a silent widening. An allowlist with no reasons is just a hole.
+        """
+        allowed = {
+            "tools/measure.py": (
+                "shells out to `wmic` to record CPU and RAM for the performance metrics; "
+                "measurement tooling, never reached by document content"
+            ),
+            "tools/capture_screenshots.py": (
+                "starts the Streamlit server to photograph the running application; development "
+                "tooling invoked by a person, never reached by document content"
+            ),
+        }
+        offenders = []
         for path in self._project_python():
             text = path.read_text("utf-8")
             if re.search(r"\b(subprocess|os\.system)\b", text):
                 relative = path.relative_to(PROJECT_ROOT).as_posix()
-                assert relative in allowed, f"{relative} shells out"
+                if relative not in allowed:
+                    offenders.append(relative)
+        assert offenders == [], f"shells out without a recorded exemption: {offenders}"
+
+        for relative, reason in allowed.items():
+            assert reason.strip(), f"{relative} is exempt from SEC-04 with no stated reason"
+            source = _source(PROJECT_ROOT / relative)
+            assert re.search(r"\b(subprocess|os\.system)\b", source), (
+                f"{relative} is listed as exempt but no longer shells out; remove it so the "
+                "allowlist does not drift"
+            )
+
+        # `shell=True` is the thing that actually matters. Passing a list of arguments is safe on
+        # every platform; passing one string is what would let a filename become a shell command.
+        for relative in allowed:
+            source = _source(PROJECT_ROOT / relative)
+            assert "shell=True" not in source, f"{relative} must not use shell=True"
+
         measure = _source(PROJECT_ROOT / "tools" / "measure.py")
-        # `shell=True` is the thing that matters. Passing a list of arguments is safe on every
-        # platform; passing one string is what would let a filename become a shell command.
-        assert "shell=True" not in measure, "measure.py must not use shell=True"
         assert 'subprocess.run(\n                ["wmic"' in measure or '["wmic", "CPU"' in measure, (
             "the wmic invocation must pass its arguments as a list, not a single string"
         )

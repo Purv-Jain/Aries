@@ -13,7 +13,7 @@
 |---|---|
 | **Phase complete** | Phases 0–6: research, documentation, foundation, retrieval, verification, UI, testing + hardening |
 | **Phase in progress** | **7** (Stage 3 readiness) — report **drafted** at [16_STAGE_3_REPORT_DRAFT.md](16_STAGE_3_REPORT_DRAFT.md), logs captured in [logs/](../logs/README.md) |
-| **G7 blocked on** | **Screenshots S1–S9** (no human at a screen), **B-05** (no repository ⇒ no contribution table, no CI), semantic-profile figures (no weights) |
+| **G7 blocked on** | **B-05** (placeholder author ⇒ no per-member contribution table), **B-07 residual**, the 6 adversarial abstention misses, and the 4 manual UI states (greyscale, keyboard-only, 1280 px, degraded). Screenshots S1–S5 are **captured** |
 | **Tests written** | **512** across `test_core.py` (64), `test_retrieval.py` (87), `test_verification.py` (136), `test_ui.py` (98), `test_hardening.py` (64), `test_generalisation.py` (63) |
 | **Commits made** | **2** — `fd2be70` (Phase 7, attributed) and `9772226` (Phases 0–6, **placeholder author**, B-05) |
 | **CI** | **GREEN.** Run [37880879892](https://github.com/Purv-Jain/Aries/actions/runs/37880879892) on `66075b`: `offline (ubuntu-latest)`, `offline (windows-latest)`, `security-sweep` all **success**. B-08 closed |
@@ -783,6 +783,70 @@ happens to hold the file.
 sweep block** from the committed calibration record. Found in Phase A, reproduced and confirmed here.
 The documented command now carries `--sweep`, and `tools/evaluate.py` explains the consequence.
 
+## 7.9 UI evidence — five real screenshots
+
+**Phase 8, 2026-10-10.** S1–S5 were captured by launching the actual application and driving it, not
+by describing it.
+
+| # | File | State | Bytes |
+|---|---|---|---|
+| S1 | `docs/screenshots/S1_dashboard_empty.png` | Dashboard before any upload — the real empty state | 244,633 |
+| S2 | `docs/screenshots/S2_library_indexed.png` | Indexed document library, after a real upload | 234,418 |
+| S3 | `docs/screenshots/S3_answer_with_citations.png` | Grounded answer with `[Sx, p.y]` markers | 323,529 |
+| S4 | `docs/screenshots/S4_verification_evidence.png` | Per-claim verification, cited passage open | 335,149 |
+| S5 | `docs/screenshots/S5_abstention.png` | Out-of-corpus question refused | 304,587 |
+
+1440x900 viewport, 2x device scale, captured by
+[`tools/capture_screenshots.py`](../tools/capture_screenshots.py). Regenerating is one command and
+nothing was hand-edited afterwards.
+
+**Which document, and why it matters.** The captures use the committed synthetic fixture, **not** the
+team's Stage 2 report. Screenshots of that report committed to a public repository would publish it
+— its authors, their PRNs, their guide — and would undo the decision §7.8 declined to make. A test now
+asserts the capture script never reads it, so this cannot be undone quietly later.
+
+**S5 is the Phase B gate, on screen.** It shows *"No answer was produced"*, the coverage figure against
+the 0.50 floor, the specific query terms that did not match (`boiling`, `level`, `mercury`, `point`,
+`sea`), and a verification panel reading 0/0/0 with *"Nothing to verify — the answer was abstained
+on."* R-24 was closed by a number; this is the same behaviour as a user meets it.
+
+### Three harness defects found on the way, all of which pointed at the app
+
+1. **Waiting for the status widget to disappear.** On first load the widget does not exist yet, so
+   `count() == 0` means *has not started*, not *has finished*. The first failure read "the Dashboard
+   is missing", which sends you looking at `app.py`.
+2. **A fixed poll interval.** It gave up at 16 s; a cold Streamlit render on this machine takes
+   about 18 s. Same misleading error.
+3. **`page.content()` versus `inner_text`.** They do not agree on this build: `content()` reported
+   the library filename but not the workspace's empty-state note; `inner_text` the reverse. Using
+   only one produced a false "the panel never rendered", **twice, in opposite directions**.
+
+The fix is to wait for the content that must be there and match it against **either** measure. Each
+failure named the harness rather than the application, which is the whole difficulty: a screenshot
+harness that misreports its own timing produces fabricated-looking evidence of a broken app.
+
+### Keeping them honest
+
+`TestScreenshotsAreEvidence` (12 tests) asserts each file exists, is a complete PNG ending in `IEND`,
+is not a blank rectangle (a failed render produces a valid, tiny, uniform PNG), and that the set
+matches what the report cites. It **cannot** tell whether a picture is honest — only a person can — and
+it is described that way rather than oversold.
+
+### Also fixed
+
+The SEC-04 sweep failed on the new capture script, correctly: it shells out to start Streamlit. The
+sweep already carried a named allowlist designed for exactly this (*"the single exception ... named
+here so that adding a second one would be visible"*). Rather than narrow the sweep, the allowlist
+became a `path -> reason` map, each entry now states **why** it is exempt, the `shell=True` ban was
+extended to every exempt file, and a reverse check fails if an exempt file stops shelling out so the
+list cannot drift. The same enforcement, with less room to abuse.
+
+### Still manual
+
+S6–S9 — greyscale legibility, keyboard-only traversal, a 1280x768 viewport, and the degraded-mode
+banner — are the four states a machine cannot honestly certify. 98 UI tests prove the render path
+executes; they cannot see a layout. Those remain open, and are listed as open.
+
 ## 8. Measurements taken
 
 ### 8.1 Phase 6 — on the real Stage 2 report
@@ -903,7 +967,7 @@ beside the real ones would flatter the system.
 
 | # | Item | Needs | Who |
 |---|---|---|---|
-| 7.2 | **Screenshots S1?S9** | someone at a screen running `streamlit run app.py`. Nine captures, each labelled *captured* with a timestamp. None will be fabricated, so the report currently has no screenshots and says so | Human |
+| 7.2 | ~~**Screenshots S1–S9**~~ | **S1–S5 captured 2026-10-10**, real, by `tools/capture_screenshots.py` driving a real Streamlit process; a test fails if any goes missing, truncates or blanks out. S6–S9 (greyscale, keyboard-only, 1280 px, degraded) still need a person | §7.9 |
 | 7.4 | **Contribution table** | **B-05**: `git init`, a remote, and a decision on authorship. `git log --author=` currently has no output, so ?13 of the report is empty | Human |
 | 7.6b | R-23 manual UI checks | greyscale, keyboard-only, 1280/768 px. Three pairs of eyes | Human |
 | ? | CI run | follows from B-05 (B-08) | Human |
@@ -959,6 +1023,7 @@ The equivalents that matter now live in the project:
 | Start the app headless | `streamlit run app.py --server.headless true` |
 
 ## 11. Change log
+| 2026-10-10 | 8 | **UI evidence captured.** `tools/capture_screenshots.py` starts a real Streamlit process, uploads the committed synthetic fixture and photographs five real states — empty dashboard, indexed library, grounded answer with citations, per-claim verification with the cited passage, and an out-of-corpus refusal that names the query terms which did not match. Captured on the **synthetic fixture, not the Stage 2 report**, because screenshots of that report in a public repository would publish it. Three harness defects found and fixed, each of which had produced a misleading "the panel never rendered" failure: waiting on a status widget that does not exist yet on first load, a fixed 16 s poll against an 18 s cold render, and `page.content()` disagreeing with `inner_text` in both directions. 12 new tests keep the set honest (complete PNG, not a blank rectangle, set matches the report). SEC-04's allowlist became a path-to-reason map with a reverse check. **524 passed** |
 | 2026-10-10 | 8 | **B-07 partly closed; generality is now a measurement.** Nine synthetic PDFs (35 KB, all committed) covering two-column pages, space-padded tables, a very long page, hyphenation, non-ASCII, running headers, a scanned page and an encrypted file; **63 tests** assert the whole path on each — extraction, page numbering, citation resolution, retrieval of the answering page, determinism, and that **abstention still fires** on topics absent from each document, which is what proves the coverage floor is not a property of the Stage 2 report. The Stage 2 report itself is **deliberately not committed** (public repo, PRNs); its sha256 is recorded. Found and fixed a **harness** defect: `tests/conftest.py` encoded PDF content streams as ISO-8859-1 against a font declaring `/WinAnsiEncoding`, silently replacing em dashes and curly quotes with `?` at write time — accented letters survived, so it looked like an extractor bug and was not. Now cp1252. Also fixed the Phase A finding that `tools/evaluate.py` does not sweep without `--sweep` and silently deletes the committed sweep block. **512 passed** with the report, **492 + 20 skips** without. 63 added, none weakened |
 | 2026-10-09 | 7 | **R-25 closed: the antonym branch is measured, and a fourth defect falls out.** Ten labelled antonym cases (`ant_01`-`ant_10`) authored from real report passages; four must fire the contradiction check and six must not, each for a different named reason. Measured: **4/4 contradictions detected, 6/6 non-firings silent**. Adding them exposed a defect the 31 unit tests could not see — a claim about *any* subject was reported contradicted if the passage contained an opposite direction word anywhere, so `ant_09` (“The paid API expenditure increased after Stage 2”) was labelled `contradiction_detected` by a table row about blind trust. A false contradiction is worse than a missed one, so a subject gate now requires the claim to be about the sentence holding the antonym, exempting single-sentence passages so minimal pairs still fire; a test asserts the gated result set is a *subset* of the ungarded one over 100+ word pairs. Accuracy **0.667 → 0.735**, `Verified` recall 0.800 → 0.846, F1 0.889 → 0.917, precision 1.000, false-`Verified` 0.000, **threshold still 0.63**. Also documented a reporting trap: the sweep holds `review_threshold` at verified/2, so its accuracy column reads 0.706 against the shipped configuration's 0.735. ADR-0015 added. **441 passed, 6 deselected.** 12 tests added, none weakened |
 | 2026-10-09 | 7 | **R-24 closed: evidence-based abstention.** Audit first, code second. Rejected a floor on `relevance_score` after measuring that answerable and unanswerable cosine ranges overlap (any floor catching most unanswerable questions killed ≥5 of 8 answerable). Shipped `query_coverage` instead — fraction of the question's content words present in the retrieved passages — gated in `ask()` **before generation**, floor `0.50` in `AbstentionConfig`, swept 0.00→1.00 on a new 48-case labelled set (24 answerable naming their page, 24 unanswerable incl. **6 adversarial**). Measured: correct abstention **0.000 → 0.750**, false abstention **0.000**, false-`Verified` on the original 10 questions **15 → 0**, claims emitted on them **50 → 0**, answerable claims **unchanged**. Also: `GeneratedAnswer.notes` silently accepted a bare `str` (UI rendered single letters) — now coerced. **429 passed, 6 deselected.** ADR-0014 added; 14 docs updated; 24 tests added, none weakened |

@@ -121,7 +121,7 @@ Ending on the limitation makes everything before it more credible.
 - [ ] Internet **off** for the offline-profile beats
 - [ ] Two questions memorised: one clearly absent (**it will refuse** — mercury's boiling point) and one adversarial (**it will answer, wrongly** — MiniLM throughput). Rehearsing only the first is how you get caught
 - [ ] A known-contradiction case memorised
-- [ ] Screenshots of every state, each labelled *captured* with its timestamp — **none exist yet (7.2)**
+- [x] Screenshots of every state, each labelled *captured* — **S1–S5 exist** ([docs/screenshots/](../docs/screenshots/), captured 2026-10-10). S6–S9 (greyscale, keyboard-only, 1280 px, degraded) still to do
 - [ ] `logs/02_test_suite_offline.txt` open in a tab, in case "how do you know?" comes early
 - [ ] `pytest -q` output on screen, real, not from memory
 - [ ] `run_demo.py` ready as a fallback if the browser misbehaves

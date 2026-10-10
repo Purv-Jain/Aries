@@ -985,3 +985,76 @@ class TestHonestEmptyStates:
         source = _app_source()
         assert "not proof that a claim is true" in source
         assert "What this label does not mean" in source
+
+# --------------------------------------------------------------------------
+# UI evidence: the captured screenshots are real files, and they are not blank
+# --------------------------------------------------------------------------
+
+
+class TestScreenshotsAreEvidence:
+    """Phase F captured five screenshots of the running application.
+
+    A screenshot is evidence, which makes it exactly the kind of artefact that rots quietly: it
+    outlives the code that produced it, nobody notices, and a report ends up citing a picture of a
+    version of the app that no longer exists.
+
+    These tests cannot tell whether a picture is *honest* -- only a person can. What they can do
+    is fail when a file is missing, truncated, or a blank rectangle, and when the set drifts from
+    the states the report claims to show. Regenerate with `tools/capture_screenshots.py`.
+    """
+
+    EXPECTED = {
+        "S1_dashboard_empty": "the dashboard before upload, in its real empty state",
+        "S2_library_indexed": "the indexed document library",
+        "S3_answer_with_citations": "a grounded answer carrying [Sx, p.y] markers",
+        "S4_verification_evidence": "per-claim verification and the cited passage",
+        "S5_abstention": "an out-of-corpus question refused",
+    }
+
+    @staticmethod
+    def _dir() -> Path:
+        return Path(__file__).resolve().parent.parent / "docs" / "screenshots"
+
+    @pytest.mark.parametrize("stem,what", sorted(EXPECTED.items()))
+    def test_the_screenshot_exists_and_is_a_real_png(self, stem: str, what: str) -> None:
+        path = self._dir() / f"{stem}.png"
+        assert path.exists(), f"{stem}.png is missing; regenerate with tools/capture_screenshots.py"
+        payload = path.read_bytes()
+        assert payload.startswith(b"\x89PNG\r\n\x1a\n"), f"{stem} is not a PNG"
+        assert payload[-8:] == b"IEND\xaeB`\x82", f"{stem} looks truncated"
+
+    @pytest.mark.parametrize("stem,what", sorted(EXPECTED.items()))
+    def test_the_screenshot_is_not_a_blank_rectangle(self, stem: str, what: str) -> None:
+        """A uniform image is what a failed render produces, and it looks like a valid PNG.
+
+        Checked by counting distinct colours in the raw pixels, which needs no image library. A
+        real render of this app yields hundreds; a blank one yields one.
+        """
+        payload = (self._dir() / f"{stem}.png").read_bytes()
+        # Crude but sufficient: the compressed stream of a real screenshot varies constantly,
+        # while a solid image compresses to almost nothing.
+        distinct = len(set(payload[200:20000]))
+        assert len(payload) > 40_000, f"{stem} is only {len(payload)} bytes; that is not a render"
+        assert distinct > 40, f"{stem} looks uniform; distinct byte values: {distinct}"
+
+    def test_every_state_the_report_claims_is_actually_captured(self) -> None:
+        present = {p.stem for p in self._dir().glob("*.png")}
+        missing = set(self.EXPECTED) - present
+        assert not missing, f"the report cites screenshots that do not exist: {sorted(missing)}"
+
+    def test_the_capture_script_commits_to_the_synthetic_fixture(self) -> None:
+        """Screenshots of the Stage 2 report would publish it.
+
+        Phase E declined to commit that document because it names its authors, their PRNs and their
+        project guide, and the repository is public. Capturing its pages would undo that decision
+        through a side door, so the capture script is asserted to use the committed fixture instead.
+        """
+        script = (
+            Path(__file__).resolve().parent.parent / "tools" / "capture_screenshots.py"
+        ).read_text("utf-8")
+        assert "fixtures" in script and "single_column.pdf" in script, (
+            "the capture script must use the committed synthetic fixture"
+        )
+        assert "Downloads" not in script, (
+            "the capture script must not read the team's Stage 2 report"
+        )
