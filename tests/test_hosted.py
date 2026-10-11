@@ -21,10 +21,12 @@ import pytest
 from src.advisor import REASON_ACTIONS, advise
 from src.generator import (
     API_KEY_ENV_VAR,
+    ExtractiveGenerator,
     OpenRouterGenerator,
     RemoteModelCatalog,
     api_key_is_configured,
     build_generator,
+    neutralise_source_markers,
 )
 from src.models import (
     CORRECTION_ACTIONS,
@@ -385,6 +387,71 @@ class TestHostedGeneratorGrounding:
 # ---------------------------------------------------------------------------
 # Model catalogue
 # ---------------------------------------------------------------------------
+
+
+class TestSourceMarkerDisambiguation:
+    """A document's own `[3]` must never read like this system's `[S1, p.10]`.
+
+    Both generators are covered because the hosted one produces the same confusion by a different
+    route: the model copies the citation out of the evidence it was given.
+    """
+
+    def test_a_source_citation_is_rewritten_but_its_number_is_kept(self) -> None:
+        assert (
+            neutralise_source_markers("Cisco [3] describes the LAN.")
+            == "Cisco (refs 3) describes the LAN."
+        )
+
+    def test_a_grouped_citation_is_rewritten_as_a_group(self) -> None:
+        assert neutralise_source_markers("shown [3, 4] above") == "shown (refs 3, 4) above"
+
+    def test_our_own_markers_are_left_alone(self) -> None:
+        """The rewrite must not touch what it exists to distinguish from."""
+        for text in ("Evidence [S1, p.10] supports this.", "[S1, p.4; S2, p.2]"):
+            assert neutralise_source_markers(text) == text
+
+    def test_evidence_text_is_never_modified(self) -> None:
+        """Demotion and rewriting both leave the stored passage exactly as extracted."""
+        passage = "[3] Cisco, “What Is a LAN?” Cisco, n.d. Available: https://example.com."
+        stored = chunk(passage, page=10)
+
+        assert stored.text == passage
+        assert "[3]" in stored.text
+
+    def test_the_extractive_generator_disambiguates_its_claims(self) -> None:
+        generator = ExtractiveGenerator()
+        evidence = [
+            chunk(
+                "The proposed design uses star topology with a central switch [2, 4] and one "
+                "router for the onward path.",
+                page=5,
+                chunk_id="chk_top",
+            )
+        ]
+
+        answer = generator.generate("What topology is proposed?", evidence, 5)
+
+        assert answer.claims
+        assert "[2, 4]" not in answer.text
+        assert "(refs 2, 4)" in answer.text, "the author's citation must survive as evidence"
+        assert "[S1, p.5]" in answer.text, "and our own marker must be distinguishable from it"
+
+    def test_the_hosted_generator_disambiguates_model_copied_citations(self) -> None:
+        generator = OpenRouterGenerator(
+            sleep=lambda s: None, api_key="k", transport=reply(
+                "The design uses star topology [3]. The router sits between switch and firewall [4]."
+            )
+        )
+        evidence = [
+            chunk("The design uses star topology. The router sits between the switch and the "
+                  "firewall along the onward path.", page=5, chunk_id="chk_host")
+        ]
+
+        answer = generator.generate("What topology is proposed?", evidence, 5)
+
+        assert answer.claims
+        assert "[3]" not in answer.text
+        assert "(refs 3)" in answer.text
 
 
 class TestModelFallbackChain:

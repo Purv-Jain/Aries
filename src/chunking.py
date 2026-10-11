@@ -159,6 +159,7 @@ def chunk_page(page: DocumentPage, config: ChunkConfig | None = None) -> tuple[E
             start = spans[-1][0] + 1
 
     chunks: list[EvidenceChunk] = []
+    is_reference = "reference_page_detected" in page.warnings
     for index, (begin, finish) in enumerate(spans):
         text = " ".join(words[begin:finish])
         chunks.append(
@@ -170,6 +171,7 @@ def chunk_page(page: DocumentPage, config: ChunkConfig | None = None) -> tuple[E
                 chunk_index_in_page=index,
                 text=text,
                 citation_label="",
+                is_reference_page=is_reference,
             )
         )
     return tuple(chunks)

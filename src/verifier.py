@@ -63,6 +63,14 @@ MARKER_PATTERN = re.compile(
 
 _REF_PATTERN = re.compile(r"S(?P<label>\d+)\s*,\s*p\.\s*(?P<page>\d+)")
 
+# A source document's own citation markers: `[1]`, `[3, 4]`, `[12]`. These are *not* malformed
+# citations by this system's grammar -- they are the author citing something else entirely. Measured
+# on Group19_SLA_Report1.pdf, a correct, well-grounded claim that quoted the document's own `[2]`
+# was parsed as an unresolvable marker and labelled Unsupported, which accuses the answer of
+# fabricating a citation it merely reported. Recognising the shape and ignoring it is what keeps
+# "malformed marker" meaning "we emitted a broken marker of our own".
+_SOURCE_MARKER_PATTERN = re.compile(r"^\s*\d{1,3}(?:\s*[,;]\s*\d{1,3})*\s*$")
+
 # Words that carry no evidential weight. Short and academic-specific: a claim built only from these
 # would otherwise score highly against any passage.
 STOPWORDS: frozenset[str] = frozenset(
@@ -163,7 +171,7 @@ def parse_markers(text: str) -> tuple[CitationRef, ...]:
         if not found:
             # An empty pair of brackets is not a citation. Treating `[]` as a malformed marker
             # would label an answer Unsupported for containing stray punctuation.
-            if bracket.strip():
+            if bracket.strip() and not _SOURCE_MARKER_PATTERN.match(bracket):
                 refs.append(
                     CitationRef(source_id=None, page_number=None, raw=bracket.strip(), resolved=False)
                 )

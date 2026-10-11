@@ -47,6 +47,7 @@ __all__ = [
     "TooManyPagesError",
     "sanitize_display_name",
     "detect_injection_patterns",
+    "detect_reference_page",
     "load_document",
     "NEAR_EMPTY_CHARS",
     "MAX_DISPLAY_NAME_CHARS",
@@ -62,6 +63,33 @@ _FALLBACK_DISPLAY_NAME = "unnamed-document.pdf"
 
 _WS_RUN = re.compile(r"\s+")
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f]")
+
+# -- reference-page detection ------------------------------------------------
+#
+# A bibliography page is real evidence, but ranking it above prose makes the system quote a
+# citation as though it were a finding. These three patterns are deliberately separate so the
+# decision can require more than one signal.
+#
+# The heading is matched unanchored on purpose: PDF extraction collapses the layout, so "11.
+# References" arrives glued to the page number and the first entry rather than on its own line.
+_REFERENCE_HEADING = re.compile(
+    r"\b(?:references|bibliography|works\s+cited|reference\s+list)\b", re.IGNORECASE
+)
+
+# An entry opening: a bracketed or dotted numeral followed by capitalised or quoted text. Requires
+# the capital so that "192.168.19.0/24" and "20 PCs" do not read as entry 192 and entry 20.
+_REFERENCE_ENTRY_START = re.compile(
+    r"(?:\[\s*\d{1,3}\s*\]|(?<![\w.)\]])\d{1,3}[.)])\s+(?=[\"“'\[]?[A-Z])"
+)
+
+# Furniture that appears in citations and almost nowhere else. This is the third required signal,
+# and the one that stops a prose section which merely says "References" and numbers its claims
+# from being mistaken for a bibliography.
+_BIBLIOGRAPHIC_CUE = re.compile(
+    r"(?:\bdoi\s*[:/]|\bhttps?://|\bAvailable\s*:|\bAccessed\s*:|\bet\s+al\.|\bpp?\.\s*\d|"
+    r"\b\d{4}\s*[,.;)]|\bIEEE\b|\bSpringer\b|\bPress\b|\bvol\.\s*\d|\bn\.\s*d\.\b)",
+    re.IGNORECASE,
+)
 
 # Shapes of instruction-like text that a PDF author can embed. Detection only --
 # the text is always treated as evidence and never as an instruction (SEC-05,
@@ -160,6 +188,38 @@ def sanitize_display_name(filename: str) -> str:
     if not base.strip("._-") or base in {".", ".."}:
         return _FALLBACK_DISPLAY_NAME
     return base
+
+
+def detect_reference_page(text: str) -> bool:
+    """Whether this page is a bibliography rather than prose the user asked about.
+
+    A reference list is legitimate evidence, but it is the wrong evidence: a question about the
+    proposed network topology was answered from the "References" page and cited the *citation* as
+    though it were a finding. That is the failure this prevents.
+
+    Two independent signals are required, because either alone misfires. A heading word alone
+    matches a section that merely discusses references; entry shapes alone match any enumerated
+    list. Together they mean a page that is mostly a citation list.
+
+    Deliberately conservative: a false positive would hide real content, and a false negative costs
+    only one poorly ranked passage.
+    """
+    if not text or not _REFERENCE_HEADING.search(text):
+        return False
+
+    starts = [match.start() for match in _REFERENCE_ENTRY_START.finditer(text)]
+    if len(starts) < 2:
+        return False
+
+    # Everything from the first entry onward is bibliography, including wrapped lines, so this
+    # measures the share of the page rather than counting lines.
+    entry_region = text[starts[0]:]
+    if len(entry_region) / max(len(text), 1) < 0.25:
+        return False
+
+    # A heading plus two bracketed numbers is also how a prose section listing its own claims can
+    # look. Bibliographic furniture is what separates them.
+    return bool(_BIBLIOGRAPHIC_CUE.search(text))
 
 
 def detect_injection_patterns(text: str) -> tuple[str, ...]:
@@ -307,6 +367,9 @@ def load_document(
         injection_codes = detect_injection_patterns(text)
         for code in injection_codes:
             warnings.append(f"injection_pattern_detected:{code}")
+
+        if detect_reference_page(text):
+            warnings.append("reference_page_detected")
 
         pages.append(
             DocumentPage(

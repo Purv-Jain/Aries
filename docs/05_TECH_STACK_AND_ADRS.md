@@ -532,3 +532,76 @@ facts, and the UI renders them differently: `AnswerResponse.corrections` is empt
 The limit is stated rather than hidden: **this cannot tell whether the *source* is right.** It
 compares a claim with the passage that claim cites; if the document itself is wrong, a perfectly
 supported citation is still wrong and nothing here detects that.
+
+## ADR-0018 — A bibliography is demoted, never deleted
+
+**Context.** A student report (`Group19_SLA_Report1.pdf`, 10 pages) was asked *"What topology is
+proposed?"*. The top-ranked passage was page 10, `11. References`, scoring **0.2043** against
+**0.1268** for page 4, which actually discusses topology. The answer quoted `[3] Cisco, "What Is
+a LAN?"` — a *citation* — as though it were a finding.
+
+A reference list is legitimate evidence. It is just usually the wrong evidence, and a dense page of
+titles, authors and URLs is lexically noisy in exactly the way a short question matches.
+
+**Decision.** Detect a bibliography page at ingestion (`detect_reference_page`), carry the finding
+on the chunk as `is_reference_page`, and multiply its retrieval score by **0.35** in the one shared
+ranking function, `_sorted_results`.
+
+**Alternatives rejected.**
+
+- *Exclude reference pages from the index.* Then "which source supports this?" becomes
+  unanswerable, and a citation the UI offers can no longer be resolved. Deleting evidence to fix a
+  ranking problem is the wrong trade in a traceability tool.
+- *Strip them at chunk time.* Same objection, plus it silently edits what the user can read.
+- *Ask the model not to use them.* Does nothing for the offline path, which is the default.
+
+**Consequences.** Prose addressing the question wins; a question *about* the references still
+reaches them. Detection is deliberately conservative — it requires a reference heading **and** at
+least two entry shapes **and** bibliographic furniture (DOI, URL, "Accessed:", "et al."), because
+a false positive hides real content while a false negative costs one badly ranked passage. The
+documented factor is asserted exactly in tests, so the behaviour is predictable rather than merely
+favourable. The UI labels such passages "Reference list (demoted)" — a silent discount would read
+as a scoring error.
+
+**Measured.** On the reported document, before the change the bibliography was rank 1 for 4 of 6
+reference-shaped questions; after it, rank 1 for **0 of 6**. Detection returns True for page 10
+only, and False for all 9 other pages and for all 7 other project fixtures.
+
+## ADR-0019 — A document's own citation is not our marker
+
+**Context.** The same report cites its sources as `[1]`, `[3, 4]`, `[6]`. This system emits
+`[S1, p.10]`. Two bracket systems, one number, and no way for a reader to tell which marker the
+system produced. An answer once read:
+
+    [3] Cisco, "What Is a LAN?" Cisco, n.d. [S1, p.10]
+
+**Worse.** A correct claim that quoted the document's own `[2]` parsed as an **unresolvable** marker,
+so it was labelled **`Unsupported`** {EM} the system accusing a true, well-grounded claim of
+fabricating a citation it had merely reported. That is a false accusation produced by this
+project's own verifier, which is worse than the cosmetic collision that first exposed it.
+
+**Decision.** Two layers, because one is not enough.
+
+1. *Verifier* {EM} `parse_markers` recognises a purely numeric bracket as the author's citation and
+   ignores it (`_SOURCE_MARKER_PATTERN`). `malformed_marker` now means **we** emitted a broken
+   marker of our own.
+2. *Generators* {EM} all three answer paths rewrite the display form to `(refs 2)` via
+   `neutralise_source_markers`, so the rendered answer is unambiguous.
+
+**Alternatives rejected.**
+
+- *Do nothing to the verifier, rely on the generator.* Then the guarantee depends on every future
+  code path remembering to sanitise first. A verifier that mislabels a true claim on text it
+  receives directly is wrong regardless of who produced it.
+- *Strip the markers.* A traceability tool must not delete a document's own citations.
+- *Widen `MARKER_PATTERN`.* Nothing here wants `[2]` parsed as `S2`.
+
+**Consequences.** `[2]`, `[3, 4]` and `[6]` no longer threaten a true claim's label, and a reader
+can tell the two systems apart. The stored passage is **never** modified {EM} the chunk keeps
+`[3]` verbatim and the inspector still shows the document as written. Pinned by
+`test_our_own_broken_marker_is_still_unsupported`, so `[S1 p5]` remains `malformed_marker` and
+`Unsupported`; this narrowing does not weaken CT-17.
+
+**Not solved by this.** A document that legitimately used the exact token `[S1, p.10]` in its own
+prose would still be ambiguous. Rewriting our marker format is the fix for that, and it is not
+worth breaking every stored answer for now.

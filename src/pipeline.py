@@ -835,6 +835,14 @@ def _page_warnings(pages: Sequence[DocumentPage]) -> list[str]:
     low_text = sum(1 for page in pages if "low_text_page" in page.warnings)
     if low_text:
         notes.append(f"{low_text} of {len(pages)} pages yielded very little text.")
+    reference_pages = [page for page in pages if "reference_page_detected" in page.warnings]
+    if reference_pages:
+        # Said once, because the user's response is to know it is handled -- not to be told per page.
+        notes.append(
+            f"{len(reference_pages)} of {len(pages)} pages look like a reference list and are "
+            "ranked below prose, so a citation is not quoted as if it were a finding. They stay "
+            "searchable if the question is about the references themselves."
+        )
     for page in pages:
         for warning in page.warnings:
             if warning.startswith("injection_pattern_detected:"):

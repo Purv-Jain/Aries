@@ -1039,6 +1039,9 @@ def _render_retrieved(response: AnswerResponse) -> None:
             "Page": result.chunk.page_number,
             "Document": result.chunk.filename,
             "Retrieval relevance": round(result.relevance_score, 3),
+            # Named, not hidden: a demoted passage explains why its relevance looks lower than the
+            # raw similarity would suggest, and a silent discount would read as a scoring error.
+            "Kind": "Reference list (demoted)" if result.chunk.is_reference_page else "Prose",
         }
         for result in response.retrieved
     ]

@@ -1136,3 +1136,33 @@ with no API call, exactly as offline.
 the hosted profile {EM} and treat the similarity-component finding in
 [10 §13.4](10_EVALUATION_METRICS.md#134-first-live-measurement-2026-10-11--the-threshold-does-not-transfer)
 as the hypothesis to test, not the conclusion. Two claims are an anecdote.
+
+### 12.7 Reference pages and foreign citation markers — two defects, one report
+
+Found by reading a real uploaded document end to end rather than by a test.
+
+**1. The bibliography outranked the prose that answered the question.** Measured on
+`Group19_SLA_Report1.pdf`: "What topology is proposed?" returned page 10, `11. References`, at
+**0.2043** against **0.1268** for page 4. The answer cited a citation as a finding. Now demoted by
+a documented factor of 0.35 — demoted, not deleted, so a question about the references is still
+answerable. Rank 1 for reference-shaped questions: **4 of 6 before, 0 of 6 after**. See
+[ADR-0018](05_TECH_STACK_AND_ADRS.md#adr-0018--a-bibliography-is-demoted-never-deleted).
+
+**2. Worse, and invisible until measured.** A correct claim quoting the document's own `[2]` parsed
+as an *unresolvable* citation marker, so it was labelled **`Unsupported`** — the system accusing a
+true, well-grounded claim of fabricating a citation it had merely reported from the document. The
+verifier now recognises a numeric bracket as the author's citation, not one of ours
+(`_SOURCE_MARKER_PATTERN`). Separately, both generators rewrite the display form to `(refs 2)` so
+the two bracket systems cannot be confused by a reader. See
+[ADR-0019](05_TECH_STACK_AND_ADRS.md#adr-0019--a-documents-own-citation-is-not-our-marker).
+
+**What the tests prove.** Reverting each fix makes the corresponding test fail: **3 fail** without
+them, all pass with them. `test_our_own_broken_marker_is_still_unsupported` pins that CT-17 is not
+weakened — `[S1 p5]` is still `malformed_marker` and still `Unsupported`.
+
+**A testing lesson, recorded because it nearly shipped.** The first ranking test used a query the
+prose already won on raw similarity, so it passed with the demotion deleted — a test that cannot
+fail on its bug is worse than no test, because it looks like coverage. Reproducing the exact margin
+in a synthetic fixture turned out to be unreliable, since TF-IDF does not consistently let a short
+bibliography outscore prose. The replacement asserts the invariant directly: identical text in a
+reference chunk and a prose chunk, and the prose must win. That cannot be passed by luck.

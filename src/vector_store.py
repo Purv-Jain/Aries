@@ -53,6 +53,11 @@ SEARCH_EF = 256
 # deterministic tie-break a wide enough pool that it can actually apply.
 CANDIDATE_OVERSAMPLE = 4
 
+# Multiplier applied to a bibliography page's retrieval score. Low enough that prose addressing the
+# question wins, high enough that a question *about* the references still reaches them. Not zero:
+# see `_sorted_results`.
+REFERENCE_PAGE_DEMOTION = 0.35
+
 
 class VectorStoreError(RuntimeError):
     """The store cannot serve a query."""
@@ -86,8 +91,17 @@ def _sorted_results(
 
     Shared by both stores on purpose: if each implemented its own sort, "the same query returns
     the same order" would be two separate promises instead of one.
+
+    A bibliography page is demoted rather than dropped. Ranking it on equal terms lets a question
+    about, say, the proposed topology return the "References" page and cite a citation as though
+    it were a finding. Dropping it would be worse -- an unresolvable citation -- so the chunk stays
+    retrievable and merely yields to prose that actually addresses the question.
     """
-    ordered = sorted(scored, key=lambda pair: (-pair[0], pair[1].chunk_id))
+    adjusted = [
+        (score * (REFERENCE_PAGE_DEMOTION if chunk.is_reference_page else 1.0), chunk)
+        for score, chunk in scored
+    ]
+    ordered = sorted(adjusted, key=lambda pair: (-pair[0], pair[1].chunk_id))
     return [
         RetrievalResult(rank=index, chunk=chunk, relevance_score=float(score), backend=backend)
         for index, (score, chunk) in enumerate(ordered[:limit], start=1)

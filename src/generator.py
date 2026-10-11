@@ -115,6 +115,29 @@ class AnswerGenerator(Protocol):
     ) -> GeneratedAnswer: ...
 
 
+# A source document's own citation markers: `[1]`, `[3, 4]`, `[12]`. Our markers are `[S1, p.4]`
+# and are built by `build_markers`; this pattern matches the *other* kind, so the two can be told
+# apart in either direction. `\d` alone cannot match `S1, p.4`.
+_SOURCE_MARKER = re.compile(r"\[(\d{1,3}(?:\s*[,;]\s*\d{1,3})*)\]")
+
+
+def neutralise_source_markers(text: str) -> str:
+    """Rewrite a quoted document's own `[3]` markers so they cannot be read as ours.
+
+    An answer looked like this before this existed:
+
+        [3] Cisco, "What Is a LAN?" Cisco, n.d. [S1, p.10]
+
+    Two bracket systems, one number, and no way for the reader to tell which marker this system
+    produced. The document is quoting a source; the system is citing a passage. Rendering the
+    former as `(refs 3)` keeps the information the author put there and removes the collision.
+
+    Only the brackets change. The reference numbers are preserved, because a traceability tool that
+    silently deletes a document's citations would be destroying evidence.
+    """
+    return _SOURCE_MARKER.sub(r"(refs \1)", text)
+
+
 def assign_citation_labels(evidence: Sequence[EvidenceChunk]) -> dict[str, str]:
     """Map every evidence chunk to its display label, in rank order.
 
@@ -240,7 +263,7 @@ class ExtractiveGenerator:
             claims.append(
                 Claim(
                     claim_id=f"clm_{len(claims)}",
-                    text=_WS_RUN.sub(" ", sentence).strip(),
+                    text=neutralise_source_markers(_WS_RUN.sub(" ", sentence).strip()),
                     markers=build_markers(chunk, labels),
                     position=len(claims),
                 )
@@ -440,17 +463,22 @@ class FlanT5Generator:
         claims: list[Claim] = []
         for sentence in sentences:
             cleaned = _WS_RUN.sub(" ", sentence).strip()
+            # Attribution runs against the text as the model wrote it, because that is the text
+            # that matches the evidence. Neutralising afterwards means a copied `[3]` cannot be
+            # mistaken for one of our markers, while the evidence lookup still sees what it needs.
             source = _attribute(cleaned, evidence)
             claims.append(
                 Claim(
                     claim_id=f"clm_{len(claims)}",
-                    text=cleaned,
+                    text=neutralise_source_markers(cleaned),
                     markers=build_markers(source, labels) if source else (),
                     position=len(claims),
                 )
             )
 
-        return GeneratedAnswer(text=raw, claims=tuple(claims), generator=self.name)
+        return GeneratedAnswer(
+            text=neutralise_source_markers(raw), claims=tuple(claims), generator=self.name
+        )
 
 
 OPENROUTER_ENDPOINT = "https://openrouter.ai/api/v1/chat/completions"
@@ -831,7 +859,11 @@ class OpenRouterGenerator:
                 ),
             )
 
-        return GeneratedAnswer(text=raw.strip(), claims=tuple(claims), generator=self.name)
+        return GeneratedAnswer(
+            text=neutralise_source_markers(raw.strip()),
+            claims=tuple(claims),
+            generator=self.name,
+        )
 
 
 def _attribute(sentence: str, evidence: Sequence[EvidenceChunk]) -> EvidenceChunk | None:

@@ -147,6 +147,77 @@ class TestMarkerGrammar:
         assert not MARKER_PATTERN.fullmatch("[S1, 5]")
         assert not MARKER_PATTERN.fullmatch("[S1]")
 
+    def test_a_documents_own_citation_is_not_parsed_as_our_marker(self) -> None:
+        """The ambiguity that started this, and the false accusation it caused.
+
+        A real document (Group19_SLA_Report1.pdf) cites its own sources as `[1]`, `[3, 4]`, `[6]`.
+        Two separate defects came from that:
+
+        1. An answer once read `[3] Cisco, "What Is a LAN?" Cisco, n.d. [S1, p.10]` -- two bracket
+           systems, one number, no way to tell which marker this system produced.
+        2. Worse, and invisible until measured: `[2]` inside a correct claim parsed as an
+           *unresolvable* marker, so a true, well-grounded claim was labelled `Unsupported`. That
+           accuses the answer of fabricating a citation it merely reported from the document.
+
+        Recognising the shape here is what keeps `malformed_marker` meaning "we emitted a broken
+        marker of our own". The generator additionally rewrites these as `(refs n)` so the displayed
+        answer is unambiguous; this is the independent guarantee at the verifier.
+        """
+        assert parse_markers("The claim holds [3].") == ()
+        assert parse_markers("As shown [3, 4] elsewhere.") == ()
+        assert parse_markers("See reference [6] for the address scheme.") == ()
+
+    def test_a_claim_quoting_the_document_citation_is_not_marked_unsupported(
+        self, verifier: Verifier
+    ) -> None:
+        """The end-to-end consequence, asserted where it is actually decided."""
+        evidence = _chunk(
+            "chk_top",
+            "Star topology is proposed with a central switch and one router [2] for the onward "
+            "path to an external network.",
+            page=5,
+        )
+        answer = GeneratedAnswer(
+            text="Star topology is proposed with a central switch [2] and one router. [S1, p.5]",
+            claims=(
+                Claim(
+                    claim_id="clm_0",
+                    text=(
+                        "Star topology is proposed with a central switch [2] and one router."
+                    ),
+                    markers=(CitationRef(source_id="doc_a", page_number=5, raw="S1, p.5",
+                                         resolved=True),),
+                    position=0,
+                ),
+            ),
+            generator="test",
+        )
+
+        results = verifier.verify(answer, [_result(evidence)])
+
+        assert results[0].label != "Unsupported", (
+            "quoting the document's own citation must not be read as a fabricated one"
+        )
+
+    def test_our_own_broken_marker_is_still_unsupported(self, verifier: Verifier) -> None:
+        """The other half: narrowing what counts as a source marker must not weaken CT-17."""
+        evidence = _chunk("chk_top", "The design uses star topology as shown in the plan.", page=5)
+        answer = GeneratedAnswer(
+            text="The design uses star topology [S1 p5] as shown.",
+            claims=(_claim("The design uses star topology [S1 p5] as shown.", None, 0),),
+            generator="test",
+        )
+
+        results = verifier.verify(answer, [_result(evidence)])
+
+        assert results[0].label == "Unsupported"
+        assert results[0].reason == Reason.MALFORMED_MARKER
+
+    def test_ours_still_parse_when_a_source_citation_sits_beside_them(self) -> None:
+        refs = parse_markers("The author cites [3] and our evidence says [S1, p.10].")
+        assert [ref.raw for ref in refs] == ["S1, p.10"]
+        assert refs[0].page_number == 10
+
     def test_well_formed_markers_parse(self) -> None:
         refs = parse_markers("Chroma stores locally [S1, p.4] on disk [S2, p.2].")
         assert [ref.raw for ref in refs] == ["S1, p.4", "S2, p.2"]

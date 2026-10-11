@@ -24,6 +24,7 @@ from src.pipeline import ResearchPipeline
 from src.models import (
     ChunkConfig,
     DocumentPage,
+    EvidenceChunk,
     PipelineConfig,
     Reason,
     ResourceLimits,
@@ -34,6 +35,7 @@ from src.pdf_ingestion import (
     MAX_DISPLAY_NAME_CHARS,
     PDFIngestionError,
     detect_injection_patterns,
+    detect_reference_page,
     load_document,
     sanitize_display_name,
 )
@@ -495,6 +497,192 @@ class TestMultiDocument:
             for chunk in chunk_pages(pages):
                 assert chunk.source_id == source_id
                 assert chunk.page_number <= len(pages)
+
+
+class TestReferencePageDetection:
+    """A bibliography must not outrank prose.
+
+    Measured on a real document (Group19_SLA_Report1.pdf): asking "What topology is proposed?"
+    returned the "11. References" page as rank 1 and answered by citing a *citation* --
+    `[3] Cisco, "What Is a LAN?" Cisco, n.d. [S1, p.10]`. The reference page scored 0.2043
+    against 0.1268 for the page that actually answers. Both changes tested here exist because of
+    that one wrong answer.
+    """
+
+    # Verbatim structure from the reported document's reference page, trimmed to two entries.
+    REAL_REFERENCE_PAGE = (
+        "10 11. References [1] “Self Learning Assignment (SLA),” Case Studies, Case Study 19: "
+        "Diagnostic Laboratory, course-provided assignment handout, undated, p. 7. [2] “Self "
+        "Learning Assignment (SLA): SL Report 1 - Network Requirement Analysis & Design "
+        "Planning,” course-provided report template, undated, pp. 1, 3-5. [3] Cisco, “What Is a "
+        "LAN?” Cisco, n.d. Available: https://www.cisco.com/site/us/en/learn/topics/networking/"
+        "what-is-a-lan-local-area-network.html. Accessed: 10 October 2026. [4] Cisco, “What Is a "
+        "Switch vs a Router?” Cisco, n.d. Available: https://www.cisco.com/site/us/en/learn/"
+        "topics/small-business/network-switch-vs-router.html. Accessed: 10 October 2026. [5] Cisco, "
+        "“What Is a Firewall?” Cisco, n.d. Available: https://www.cisco.com/site/us/en/learn/"
+        "topics/security/what-is-a-firewall.html. Accessed: 10 October 2026. [6] Y. Rekhter, "
+        "B. Moskowitz, D. Karrenberg, G. J. de Groot, and E. Lear, “Address Allocation for "
+        "Private Internets,” RFC 1918, February 1996. DOI: https://doi.org/10.17487/RFC1918. "
+        "Accessed: 10 October 2026."
+    )
+
+    def test_a_real_reference_page_is_detected(self) -> None:
+        assert detect_reference_page(self.REAL_REFERENCE_PAGE) is True
+
+    def test_the_prose_pages_of_that_document_are_not(self) -> None:
+        """The cost of a false positive is hiding real content, so ordinary pages must be safe.
+
+        Verbatim from the same document: section text that mentions references in passing.
+        """
+        assert detect_reference_page(
+            "4 4. Networking Concepts 4.1 LAN and WAN LAN stands for a limited area network that "
+            "is used to inter-connect devices in a limited local area. In this example, the LAN "
+            "that is actually taking place in the laboratory is shown to consist of 20 PCs, plus "
+            "the Ethernet cables that connect them to one another and to the central switch."
+        ) is False
+
+    def test_a_section_that_merely_mentions_references_is_not_a_bibliography(self) -> None:
+        """Heading plus numbered items is a normal section. Bibliographic furniture is required."""
+        text = (
+            "2 Problem Statement The laboratory must have a preliminary network design to connect "
+            "all 20 of its staff computers into one LAN network using wires. There should be a "
+            "connection to a common central switch at each workstation for the exchange of data "
+            "between devices in the laboratory network. That switch has to be connected to one "
+            "router that will give the desired path to an external network. The first phase is "
+            "then on the planning of the topology, the equipment and the address range. "
+            "References are listed at the end of the report."
+        )
+        assert detect_reference_page(text) is False
+
+    def test_an_enumerated_list_without_a_reference_heading_is_not_detected(self) -> None:
+        """Topology comparisons and device tables are numbered lists, not bibliographies."""
+        text = (
+            "5 Topology Selection Bus Basic shared-cable layout; fewer central devices. "
+            "Ring Orderly path through connected devices. Mesh Multiple paths can provide "
+            "redundancy. Star Dedicated workstation links; simple additions."
+        )
+        assert detect_reference_page(text) is False
+
+    def test_an_ip_address_is_not_read_as_an_entry_number(self) -> None:
+        """`192.168.19.0/24` must not parse as entry 192. It is addressed text, not a citation."""
+        text = (
+            "3 IP Addressing Requirement The proposed internal network is 192.168.19.0/24, with "
+            "subnet mask 255.255.255.0. 20 PCs plus the router LAN interface gives 253 hosts. "
+            "References for the addressing scheme are recorded separately in the course handout."
+        )
+        assert detect_reference_page(text) is False
+
+    def test_empty_text_is_not_a_reference_page(self) -> None:
+        assert detect_reference_page("") is False
+
+    def test_ingestion_marks_the_page_so_the_ui_can_explain_the_demotion(
+        self, tmp_path: Path
+    ) -> None:
+        """End to end through `load_document`, which is where the warning is actually set."""
+        from conftest import build_pdf, write_pdf
+
+        pdf = write_pdf(tmp_path, "with_refs.pdf", build_pdf([self.REAL_REFERENCE_PAGE]))
+
+        pages = load_document(pdf)
+
+        assert "reference_page_detected" in pages[0].warnings
+
+    def test_the_chunk_carries_the_flag_and_the_text_is_untouched(self, tmp_path: Path) -> None:
+        """Demotion must not edit evidence: the reference numbers have to survive verbatim."""
+        from conftest import build_pdf, write_pdf
+
+        pdf = write_pdf(tmp_path, "with_refs.pdf", build_pdf([self.REAL_REFERENCE_PAGE]))
+        pages = load_document(pdf)
+
+        chunks = chunk_page(pages[0])
+
+        assert chunks, "a reference page still produces chunks"
+        assert all(chunk.is_reference_page for chunk in chunks)
+        assert "[3]" in " ".join(chunk.text for chunk in chunks)
+
+    def test_a_reference_page_is_demoted_by_an_exact_factor_and_stays_retrievable(
+        self, tmp_path: Path
+    ) -> None:
+        """The measured failure, reproduced at the level it can be asserted exactly.
+
+        On the reported document, "What topology is proposed?" scored the bibliography **0.2043**
+        against **0.1268** for the page that actually answers it, so rank 1 was the reference list.
+        Reproducing that exact margin in a synthetic fixture proved unreliable -- TF-IDF does not
+        reliably let a short bibliography outscore prose, and a test that only sometimes catches
+        the bug is not a test. So the invariant is asserted directly instead: a reference page
+        always yields to an equally-relevant prose passage, and is always still returned.
+        """
+        from src.embeddings import TfidfEmbeddingBackend
+        from src.vector_store import REFERENCE_PAGE_DEMOTION, InMemoryVectorStore
+
+        backend = TfidfEmbeddingBackend()
+        reference = EvidenceChunk(
+            chunk_id="chk_ref",
+            source_id="doc_a",
+            filename="r.pdf",
+            page_number=9,
+            chunk_index_in_page=0,
+            text="A reference entry about the proposed local area network design.",
+            is_reference_page=True,
+        )
+        prose = EvidenceChunk(
+            chunk_id="chk_prose",
+            source_id="doc_a",
+            filename="r.pdf",
+            page_number=4,
+            chunk_index_in_page=0,
+            text="A reference entry about the proposed local area network design.",
+            is_reference_page=False,
+        )
+        store = InMemoryVectorStore()
+        store.set_similarity(backend.similarity, backend.name)
+        store.add([reference, prose], backend.embed_documents([reference.text, prose.text]))
+        query = backend.embed_query("proposed local area network design")
+
+        # Identical text, so the *only* difference is the flag.
+        results = store.query(query, 2)
+
+        assert results[0].chunk.chunk_id == "chk_prose", (
+            "with identical text, prose must outrank the bibliography -- this is the exact "
+            "condition under which the real document returned the reference page"
+        )
+        assert results[1].chunk.chunk_id == "chk_ref", "the bibliography must stay retrievable"
+
+        raw = backend.similarity(query, backend.embed_documents([reference.text]))[0]
+        assert abs(results[1].relevance_score - float(raw) * REFERENCE_PAGE_DEMOTION) < 1e-9, (
+            "the demotion must be the one documented factor, so the behaviour is predictable "
+            "rather than merely favourable"
+        )
+
+    def test_prose_outranks_the_bibliography_for_a_question_it_answers(
+        self, tmp_path: Path
+    ) -> None:
+        """The user-visible outcome on the reported document's own text."""
+        from conftest import build_pdf, write_pdf
+
+        prose = (
+            "5 Topology Selection and Justification Star topology is suitable for a situation "
+            "where there is a central switch with 20 PCs. Each PC is provided a link separately, "
+            "enabling per cable faults to be more easily identified. A switch that supports 24 "
+            "ports is proposed, with 20 PC links, one uplink port for a router and three spare "
+            "ports. This makes it avoid the extensive interconnections among computers."
+        )
+        pdf = write_pdf(tmp_path, "topology.pdf", build_pdf([prose, self.REAL_REFERENCE_PAGE]))
+        pipeline = ResearchPipeline(PipelineConfig(store="memory", top_k=2))
+        pipeline.index([pdf])
+
+        results = pipeline._retrieve("What topology is proposed?", 2)
+
+        assert results[0].chunk.page_number == 1, "prose must outrank the bibliography"
+        assert len(results) == 2, "and the reference page must stay retrievable, not deleted"
+
+    def test_ordinary_pages_produce_chunks_that_are_not_flagged(self, page_factory) -> None:
+        from conftest import PAGE_TEXTS
+
+        chunks = chunk_page(page_factory("src-prose", 1, PAGE_TEXTS[0]))
+
+        assert chunks
+        assert not any(chunk.is_reference_page for chunk in chunks)
 
 
 class TestReconfigure:

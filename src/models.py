@@ -294,6 +294,11 @@ class EvidenceChunk:
     chunk_index_in_page: int
     text: str
     citation_label: str = ""
+    # Set by ingestion for a bibliography page. The chunk stays fully searchable and inspectable --
+    # it is still evidence, and a question like "what does reference [3] say?" must still be
+    # answerable. It is demoted, never hidden, because deleting it would make a citation
+    # unresolvable. Defaults to False so a caller constructing a chunk directly is unaffected.
+    is_reference_page: bool = False
     word_count: int = field(init=False)
 
     def __post_init__(self) -> None:
